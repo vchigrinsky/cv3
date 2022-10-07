@@ -1,2 +1,1 @@
-# cv3
-Computer Vision Repository
+## Computer Vision Repository
