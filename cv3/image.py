@@ -1,4 +1,4 @@
-"""Image class: a wrapper over torch.Tensor, numpy.ndarray and PIL.Image.Image
+"""Image class a wrapper over torch.Tensor, numpy.ndarray
 """
 
 from torch import Tensor
@@ -8,7 +8,6 @@ from PIL.Image import Image as PILImage
 import torch
 import numpy as np
 import PIL
-
 
 
 class Image:
