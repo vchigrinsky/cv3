@@ -5,33 +5,51 @@ from .image import Image
 from .io import ImageTable, LabeledImageTable
 from .transformer import Transformer
 
-import torch.utils.data
+from torch.utils.data import Dataset as TensorDataset
 
 
-class Dataset(torch.utils.data.Dataset):
+class Dataset(TensorDataset):
     """PyTorch dataset wrapper on table
     """
 
     def __init__(
-        self, path: str, prefix: str, 
-        transformer: Transformer, 
-        has_labels: bool = False
+        self, table: ImageTable or LabeledImageTable, 
+        transformer: Transformer
     ):
         """Creates PyTorch dataset on table
 
         Args:
-            path: path to a table on disk
-            prefix: common prefix of images
-            has_labels: boolean flag
+            table: image table (may be labeled or not)
+            transformer: preprocess module
         """
 
         super().__init__()
 
-        self.has_labels = has_labels
-        self.table = LabeledImageTable.read(path, prefix) if self.has_labels \
-            else ImageTable.read(path, prefix)
-
+        self.table = table
         self.transformer = transformer
+
+    @classmethod
+    def read(
+        cls, path: str, prefix: str, 
+        transformer: Transformer, 
+        labeled: bool = False
+    ):
+        """Reads table and creates dataset
+
+        Args:
+            path: path to a table on disk
+            prefix: common prefix of images
+            transformer: preprocess module
+            labeled: boolean flag
+        """
+
+        if labeled:
+            table = LabeledImageTable.read(path, prefix)
+
+        else:
+            table = ImageTable.read(path, prefix)
+
+        return cls(table, transformer)
 
     def __len__(self) -> int:
         """Dataset length
@@ -43,10 +61,13 @@ class Dataset(torch.utils.data.Dataset):
         """Gets tensor and optionally label from dataset
         """
 
-        if self.has_labels:
+        if isinstance(self.table, LabeledImageTable):
             image, label = self.table[index]
             return self.transformer(image.tensor), label
 
-        else:
+        elif isinstance(self.table, ImageTable):
             image = self.table[index]
             return self.transformer(image.tensor)
+
+        else:
+            raise NotImplementedError

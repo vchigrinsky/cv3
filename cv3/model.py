@@ -10,36 +10,41 @@ class ConvNet(nn.Module):
     """Base convolutional network
     """
 
-    def __init__(self):
+    def __init__(self, descriptor_size: int):
         """Creates base convolutional model
+
+        Args:
+            descriptor_size: descriptor size
         """
 
         super().__init__()
 
-        self.conv1 = nn.Conv2d(3, 8, 5)
-        self.bn1 = nn.BatchNorm2d(8)
+        self.descriptor_size = descriptor_size
+
+        self.conv1 = nn.Conv2d(3, 16, 5)
+        self.bn1 = nn.BatchNorm2d(16)
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool2d(2, 2)
 
-        self.conv2 = nn.Conv2d(8, 16, 3)
-        self.bn2 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, 3)
+        self.bn2 = nn.BatchNorm2d(32)
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(2, 2)
 
-        self.conv3 = nn.Conv2d(16, 32, 3)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 64, 3)
+        self.bn3 = nn.BatchNorm2d(64)
         self.relu3 = nn.ReLU()
 
-        self.conv4 = nn.Conv2d(32, 64, 3)
+        self.conv4 = nn.Conv2d(64, 64, 3)
         self.bn4 = nn.BatchNorm2d(64)
         self.relu4 = nn.ReLU()
 
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.flatten = nn.Flatten()
-        self.linear = nn.Linear(64, 128)
-        self.bn = nn.BatchNorm1d(128)
+        self.linear = nn.Linear(64, self.descriptor_size)
+        self.bn = nn.BatchNorm1d(self.descriptor_size)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         """Pass tensor through net
 
         Args:
@@ -88,7 +93,7 @@ class Head(nn.Module):
 
         self.linear = nn.Linear(descriptor_size, n_classes)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         """Pass tensor through net head
 
         Args:

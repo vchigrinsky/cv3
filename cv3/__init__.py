@@ -7,3 +7,4 @@ import cv3.transformer
 import cv3.dataset
 import cv3.sampler
 import cv3.model
+import cv3.evaluator

@@ -3,10 +3,10 @@
 
 import math
 
-import torch.utils.data
+from torch.utils.data import Sampler
 
 
-class SequentialSampler(torch.utils.data.Sampler):
+class SequentialSampler(Sampler):
     """Sequential batch sampler
     """
 
