@@ -5,10 +5,10 @@ from .image import Image
 from .io import ImageTable, LabeledImageTable
 from .transformer import Transformer
 
-from torch.utils.data import Dataset as TensorDataset
+from torch.utils.data import Dataset as TorchDataset
 
 
-class Dataset(TensorDataset):
+class Dataset(TorchDataset):
     """PyTorch dataset wrapper on table
     """
 
@@ -27,29 +27,6 @@ class Dataset(TensorDataset):
 
         self.table = table
         self.transformer = transformer
-
-    @classmethod
-    def read(
-        cls, path: str, prefix: str, 
-        transformer: Transformer, 
-        labeled: bool = False
-    ):
-        """Reads table and creates dataset
-
-        Args:
-            path: path to a table on disk
-            prefix: common prefix of images
-            transformer: preprocess module
-            labeled: boolean flag
-        """
-
-        if labeled:
-            table = LabeledImageTable.read(path, prefix)
-
-        else:
-            table = ImageTable.read(path, prefix)
-
-        return cls(table, transformer)
 
     def __len__(self) -> int:
         """Dataset length

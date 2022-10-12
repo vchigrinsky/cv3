@@ -3,15 +3,20 @@
 
 import math
 
-from torch.utils.data import Sampler
+from torch.utils.data import Sampler as TorchSampler
 
 
-class SequentialSampler(Sampler):
+class Sampler(TorchSampler):
     """Sequential batch sampler
     """
 
     def __init__(self, length: int, batch_size: int, drop_last: bool = False):
         """Creates sequential sampler
+
+        Args:
+            length: dataset length
+            batch_size: batch size
+            drop_last: boolean flag of droping last batch
         """
 
         super().__init__(None)
@@ -40,3 +45,21 @@ class SequentialSampler(Sampler):
 
         if batch and not self.drop_last:
             yield batch
+
+
+class RandomSampler(Sampler):
+    """Random batch sampler
+    """
+
+    def __init__(self, length: int, batch_size: int, drop_last: bool = False):
+        """Creates random sampler
+
+        Args:
+            length: dataset length
+            batch_size: batch size
+            drop_last: boolean flag of droping last batch
+        """
+
+        super().__init__(length, batch_size, drop_last)
+
+        random.shuffle(self.sequence)

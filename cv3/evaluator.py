@@ -1,10 +1,10 @@
-"""Evaluate models
+"""Evaluate model
 """
 
 from .io import LabeledImageTable
 from .dataset import Dataset
 from .transformer import Transformer
-from .sampler import SequentialSampler
+from .sampler import Sampler
 from torch.utils.data import DataLoader
 
 import torch
@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 def evaluate_classification(
     table: LabeledImageTable, transformer: Transformer, 
-    body: nn.Module, head: Head, 
+    body: nn.Module, head: nn.Module, 
     batch_size: int = 1,
     verbose: bool = True
 ) -> float:
@@ -37,7 +37,7 @@ def evaluate_classification(
     labels = table.labels
 
     dataset = Dataset(table, transformer)
-    sampler = SequentialSampler(len(dataset), batch_size)
+    sampler = Sampler(len(dataset), batch_size)
     loader = DataLoader(dataset=dataset, batch_sampler=sampler)
 
     body = body.eval()
