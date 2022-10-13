@@ -1,0 +1,38 @@
+{
+    "train_table": {
+        "type": "default",
+        "path": "/home/v/cv3/data/mnist/train.csv",
+        "prefix": "/home/v/cv3/data/mnist/train"
+    },
+    "train_transformer": {
+        "type": "default",
+        "height": 28,
+        "width": 28,
+        "mean": [0.1309, 0.1309, 0.1309],
+        "std": [0.3084, 0.3084, 0.3084]
+    },
+    "train_sampler": {
+        "type": "default",
+        "drop_last": false,
+        "batch_size": 2,
+        "workers": 0
+    },
+    "body": {
+        "type": "default",
+        "descriptor_size": 128
+    },
+    "head": {
+        "type": "default"
+    },
+    "optimizer": {
+        "type": "default",
+        "lr": 0.01
+    },
+    "scheduler": {
+        "type": "default",
+        "epochs": 1
+    },
+    "loss": {
+        "type": "default"
+    }
+}
