@@ -62,9 +62,6 @@ soupsieve==2.3.2.post1
 tenacity==8.1.0
 terminado==0.16.0
 tinycss2==1.1.1
-torch==1.8.2+cpu
-torchaudio==0.8.2
-torchvision==0.9.2+cpu
 tornado==6.2
 tqdm==4.64.1
 traitlets==5.4.0
