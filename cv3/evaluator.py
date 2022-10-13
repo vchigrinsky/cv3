@@ -1,7 +1,7 @@
 """Evaluate model
 """
 
-from .io import LabeledImageTable
+from .table import LabeledImageTable
 from .dataset import Dataset
 from .transformer import Transformer
 from .sampler import Sampler

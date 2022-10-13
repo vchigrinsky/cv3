@@ -116,6 +116,7 @@ class LabeledImageTable(ImageTable):
             'labeled image table should have "label" column'
         self.labels = list(self.dataframe.label)
         self.map_labels_to_range()
+        self.n_classes = len(self.labels.unique())
 
         self.prefix = prefix
 

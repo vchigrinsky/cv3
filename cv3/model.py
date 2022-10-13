@@ -21,12 +21,11 @@ class ConvNet(nn.Module):
 
         self.descriptor_size = descriptor_size
 
-        self.conv1 = nn.Conv2d(3, 16, 5)
+        self.conv1 = nn.Conv2d(3, 16, 7)
         self.bn1 = nn.BatchNorm2d(16)
         self.relu1 = nn.ReLU()
-        self.pool1 = nn.MaxPool2d(2, 2)
 
-        self.conv2 = nn.Conv2d(16, 32, 3)
+        self.conv2 = nn.Conv2d(16, 32, 5)
         self.bn2 = nn.BatchNorm2d(32)
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(2, 2)
@@ -54,7 +53,6 @@ class ConvNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu1(x)
-        x = self.pool1(x)
 
         x = self.conv2(x)
         x = self.bn2(x)

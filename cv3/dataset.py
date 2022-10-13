@@ -2,7 +2,7 @@
 """
 
 from .image import Image
-from .io import ImageTable, LabeledImageTable
+from .table import ImageTable, LabeledImageTable
 from .transformer import Transformer
 
 from torch.utils.data import Dataset as TorchDataset

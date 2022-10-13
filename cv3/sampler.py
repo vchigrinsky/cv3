@@ -2,6 +2,7 @@
 """
 
 import math
+import random
 
 from torch.utils.data import Sampler as TorchSampler
 
@@ -21,7 +22,7 @@ class Sampler(TorchSampler):
 
         super().__init__(None)
 
-        self.sequence = range(length)
+        self.sequence = list(range(length))
         self.batch_size = batch_size
 
         self.drop_last = drop_last

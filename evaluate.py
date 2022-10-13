@@ -3,6 +3,10 @@
 
 import cv3
 
+import os.path as osp
+
+import torch
+
 from argparse import ArgumentParser
 
 
@@ -13,12 +17,17 @@ if __name__ == '__main__':
     argument_parser = ArgumentParser('Classification evaluation')
 
     argument_parser.add_argument(
-        '--path', help='Path to CSV table', 
+        '--table', help='Path to CSV table', 
         type=str, required=True
     )
     argument_parser.add_argument(
         '--prefix', help='Common prefix of all images in table', 
         type=str, required=True
+    )
+
+    argument_parser.add_argument(
+        '--experiment', help='Path to experiment directory',
+        type=str, required=False
     )
 
     argument_parser.add_argument(
@@ -53,9 +62,7 @@ if __name__ == '__main__':
 
     # -------------------------------------------------------------------------
 
-    table = cv3.io.LabeledImageTable.read(arguments.path, arguments.prefix)
-
-    n_classes = len(table.labels.unique())
+    table = cv3.table.LabeledImageTable.read(arguments.table, arguments.prefix)
 
     mean = (arguments.mean, arguments.mean, arguments.mean)
     std = (arguments.std, arguments.std, arguments.std)
@@ -64,7 +71,15 @@ if __name__ == '__main__':
     )
 
     body = cv3.model.ConvNet(arguments.descriptor_size)
-    head = cv3.model.Head(arguments.descriptor_size, n_classes)
+    head = cv3.model.Head(arguments.descriptor_size, table.n_classes)
+
+    if arguments.experiment is not None:
+        body.load_state_dict(
+            torch.load(osp.join(arguments.experiment, 'weights.body.pth'))
+        )
+        head.load_state_dict(
+            torch.load(osp.join(arguments.experiment, 'weights.head.pth'))
+        )
 
     accuracy = cv3.evaluator.evaluate_classification(
         table, transformer, body, head, 

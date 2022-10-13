@@ -1,7 +1,7 @@
 """Train model
 """
 
-from .io import LabeledImageTable
+from .table import LabeledImageTable
 from .transformer import Transformer
 from .dataset import Dataset
 from .sampler import Sampler, RandomSampler
@@ -12,18 +12,20 @@ from torch import nn
 from .model import ConvNet, Head
 
 from torch.optim import Optimizer, SGD
-from .scheduler import Scheduler, StepScheduler
+from .scheduler import Scheduler
 
 from torch.nn.modules.loss import CrossEntropyLoss
+
+from tqdm import tqdm
+
+import os.path as osp
 
 
 def train(
     train_table: LabeledImageTable, train_loader: DataLoader,
     body: nn.Module, head: nn.Module,
     optimizer: Optimizer, scheduler: Scheduler,
-    loss: nn.Module,
-    validation_table: LabeledImageTable, validation_loader: DataLoader,
-    validation: dict,
+    loss_module: nn.Module,
     path: str
 ):
     """Train model
@@ -35,28 +37,67 @@ def train(
         head: classifier module
         optimizer: optimizer
         scheduler: learning rate scheduler
-        loss: loss module
-        validation_table" labeled image table for validation
-        validation_loader: dataloader of validation dataset
-        validation: validation type and rate
-        path: experiment path to dump logs and weights
+        loss_module: loss module
+        path: experiment root
     """
 
-    pass
+    steps = scheduler.steps
+    assert steps % len(train_table) == 0, \
+        'number of steps should be divisible by train dataset length'
+    epochs = steps // len(train_table)
+
+    progress_bar = tqdm(total=steps * 2)
+
+    body = body.train()
+    head = head.train()
+
+    for epoch in range(epochs):
+        for batch, labels in train_loader:
+            optimizer.zero_grad()
+
+            descriptors = body(batch)
+            logits = head(descriptors)
+
+            loss = loss_module(logits, labels)
+
+            progress_bar.set_description(f'{loss.item():.4f}')
+            progress_bar.update(len(batch))
+
+            loss.backward()
+
+            optimizer.step()
+
+            scheduler.step()
+            for parameters_group in optimizer.param_groups:
+                parameters_group['lr'] = scheduler.lr
+
+            progress_bar.update(len(batch))
+
+    progress_bar.close()
+
+    body = body.eval()
+    head = head.eval()
+
+    torch.save(body.state_dict(), osp.join(path, 'weights.body.pth'))
+    torch.save(head.state_dict(), osp.join(path, 'weights.head.pth'))
 
 
 def parse_config(config: dict) -> (
     LabeledImageTable, DataLoader,
     nn.Module, nn.Module,
     Optimizer, Scheduler,
-    nn.Module,
-    LabeledImageTable, DataLoader, dict,
-    str
+    nn.Module
 ):
     """Prepare train experiment
 
     Args:
         config: configuration dictionary
+
+    Returns:
+        train table, train loader, 
+        backbone module, classifier module,
+        optimizer, scheduler,
+        loss module
     """
 
     # >>>>> train table
@@ -69,7 +110,7 @@ def parse_config(config: dict) -> (
         raise NotImplementedError
 
     # >>>>> train transformer
-    train_transformer_type = config['train_transformer']
+    train_transformer_type = config['train_transformer'].pop('type')
 
     if train_transformer_type == 'default':
         train_transformer = Transformer(**config['train_transformer'])
@@ -80,12 +121,18 @@ def parse_config(config: dict) -> (
     # >>>>> train loader
     train_dataset = Dataset(train_table, train_transformer)
 
-    train_sampler_type = config['train_sampler'].pop('type')
+    batch_size = config['train_sampler'].pop('batch_size')
 
     train_loader_workers = config['train_sampler'].pop('workers')
 
+    train_sampler_type = config['train_sampler'].pop('type')
+
     if train_sampler_type == 'default':
-        train_sampler = RandomSampler(**config['train_sampler'])
+        train_sampler = RandomSampler(
+            length=len(train_dataset), 
+            batch_size=batch_size,
+            **config['train_sampler']
+        )
 
     else:
         raise NotImplementedError
@@ -108,7 +155,11 @@ def parse_config(config: dict) -> (
     head_type = config['head'].pop('type')
 
     if head_type == 'default':
-        head = Head(**config['head'])
+        head = Head(
+            descriptor_size=body.descriptor_size,
+            n_classes=train_table.n_classes,
+            **config['head']
+        )
 
     else:
         raise NotImplementedError
@@ -134,7 +185,7 @@ def parse_config(config: dict) -> (
     steps = epochs * len(train_table)
 
     if scheduler_type == 'default':
-        scheduler = StepScheduler(lr, steps, **config['scheduler'])
+        scheduler = Scheduler(lr, steps, **config['scheduler'])
 
     else:
         raise NotImplementedError
@@ -143,56 +194,15 @@ def parse_config(config: dict) -> (
     loss_type = config['loss'].pop('type')
 
     if loss_type == 'default':
-        loss = CrossEntropyLoss(**config['loss'])
+        loss_module = CrossEntropyLoss(**config['loss'])
 
     else:
         raise NotImplementedError
-
-    # >>>>> validation table
-    validation_table_type = config['validation_table'].pop('type')
-
-    if validation_table_type == 'default':
-        validation_table = LabeledImageTable.read(**config['validation_table'])
-
-    else:
-        raise NotImplementedError
-
-    # >>>>> validation transformer
-    validation_transformer_type = config['validation_transformer']
-
-    if validation_transformer_type == 'default':
-        validation_transformer = Transformer(**config['validation_transformer'])
-
-    else:
-        raise NotImplementedError
-
-    # >>>>> validation loader
-    validation_dataset = Dataset(validation_table, validation_transformer)
-
-    validation_sampler_type = config['validation_sampler'].pop('type')
-
-    validation_loader_workers = config['validation_sampler'].pop('workers')
-
-    if validation_sampler_type == 'default':
-        validation_sampler = Sampler(**config['validation_sampler'])
-
-    else:
-        raise NotImplementedError
-
-    validation_loader = DataLoader(
-        dataset=validation_dataset, 
-        batch_sampler=validation_sampler, 
-        num_workers=validation_loader_workers
-    )
-
-    # >>>>> validation
-    validation = config['validation']
 
     return (
         train_table, train_loader,
         body, head,
         optimizer, scheduler,
-        loss,
-        validation_table, validation_loader, validation,
+        loss_module,
         config['path']
     )
