@@ -4,6 +4,8 @@
 import cv3
 
 import os.path as osp
+import json
+from collections import OrderedDict
 
 import torch
 
@@ -27,62 +29,102 @@ if __name__ == '__main__':
 
     argument_parser.add_argument(
         '--experiment', help='Path to experiment directory',
-        type=str, required=False
-    )
-
-    argument_parser.add_argument(
-        '--height', help='Input height', 
-        type=int, default=28
-    )
-    argument_parser.add_argument(
-        '--width', help='Input width', 
-        type=int, default=28
-    )
-
-    argument_parser.add_argument(
-        '--mean', help='Normalization mean', 
-        type=float, default=0.1309
-    )
-    argument_parser.add_argument(
-        '--std', help='Normalization std', 
-        type=float, default=0.3084
-    )
-
-    argument_parser.add_argument(
-        '--descriptor_size', help='Descriptor size',
-        type=int, default=128
+        type=str, required=True
     )
 
     argument_parser.add_argument(
         '--batch_size', help='Batch size', 
-        type=int, default=1
+        type=int, default=64
     )
 
     arguments = argument_parser.parse_args()
 
     # -------------------------------------------------------------------------
 
-    table = cv3.table.LabeledImageTable.read(arguments.table, arguments.prefix)
+    with open(osp.join(arguments.experiment, 'config.json'), 'r') as f:
+        config = json.load(f)
 
-    mean = (arguments.mean, arguments.mean, arguments.mean)
-    std = (arguments.std, arguments.std, arguments.std)
-    transformer = cv3.transformer.Transformer(
-        arguments.height, arguments.width, mean, std
+    if 'conv_bias' in config['body']:
+        bias = config['body']['conv_bias']
+    else:
+        bias = True
+
+    body_weights = torch.load(
+        osp.join(arguments.experiment, 'weights.body.pth')
+    )
+    head_weights = torch.load(
+        osp.join(arguments.experiment, 'weights.head.pth')
     )
 
-    body = cv3.model.ConvNet(arguments.descriptor_size)
-    head = cv3.model.Head(arguments.descriptor_size, table.n_classes)
+    neck_weights = OrderedDict()
+    for layer_name, layer in list(body_weights.items()):
+        if layer_name.startswith('linear.'):
+            neck_weights[layer_name] = body_weights.pop(layer_name)
+        elif layer_name.startswith('bn.'):
+            neck_weights[layer_name] = body_weights.pop(layer_name)
 
-    if arguments.experiment is not None:
-        body.load_state_dict(
-            torch.load(osp.join(arguments.experiment, 'weights.body.pth'))
-        )
-        head.load_state_dict(
-            torch.load(osp.join(arguments.experiment, 'weights.head.pth'))
-        )
+    for _, layer in body_weights.items():
+        break
+    channels = layer.size(1)
+
+    for _, layer in neck_weights.items():
+        break
+    hidden_descriptor_size = layer.size(1)
+
+    for _, layer in head_weights.items():
+        break
+    descriptor_size = layer.size(1)
+    classes = layer.size(0)
+
+    if channels == 3:
+        mode = 'rgb'
+    elif channels == 1:
+        mode = 'gray'
+    else:
+        raise NotImplementedError
+
+    table = cv3.table.LabeledImageTable.read(
+        arguments.table, arguments.prefix, mode
+    )
+
+    transformer_config = config['train_transformer']
+    height = transformer_config['height']
+    width = transformer_config['width']
+    mean = transformer_config['mean']
+    std = transformer_config['std']
+    crop_height = (
+        transformer_config['crop_height'] 
+        if 'crop_height' in transformer_config else None
+    )
+    crop_width = (
+        transformer_config['crop_width'] 
+        if 'crop_width' in transformer_config else None
+    )
+
+    transformer = cv3.transformer.Transformer(
+        height, width, mean, std, crop_height, crop_width, mode='test'
+    )
+
+    body = cv3.convnet.ConvNet(
+        channels=channels,
+        conv_bias=bias
+    )
+    neck = cv3.head.Neck(
+        channels=hidden_descriptor_size,
+        descriptor_size=descriptor_size,
+        linear_bias=bias
+    )
+    head = cv3.head.Head(
+        descriptor_size=descriptor_size,
+        classes=classes
+    )
+
+    body.load_state_dict(body_weights)
+    neck.load_state_dict(neck_weights)
+    head.load_state_dict(head_weights)
 
     accuracy = cv3.evaluator.evaluate_classification(
-        table, transformer, body, head, 
+        table, transformer, body, neck, head, 
         arguments.batch_size, verbose=True
     )
 

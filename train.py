@@ -31,11 +31,6 @@ if __name__ == '__main__':
     with open(arguments.config, 'r') as f:
         config = json.load(f)
 
-    config['path'] = arguments.config[:-5]
-    if not osp.exists(config['path']):
-        os.mkdir(config['path'])
-
-    with open(osp.join(config['path'], 'config.json'), 'w') as f:
-        json.dump(config, f, indent=4)
+    config['root'] = arguments.config[:-5]
 
     cv3.trainer.train(*cv3.trainer.parse_config(config))

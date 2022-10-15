@@ -9,15 +9,16 @@ from torch.utils.data import DataLoader
 
 import torch
 from torch import nn
-from .model import ConvNet, Head
+from .convnet import ConvNet
+from .head import Neck, Head
 
 from tqdm import tqdm
 
 
 def evaluate_classification(
     table: LabeledImageTable, transformer: Transformer, 
-    body: nn.Module, head: nn.Module, 
-    batch_size: int = 1,
+    body: nn.Module, neck: nn.Module, head: nn.Module, 
+    batch_size: int = 64,
     verbose: bool = True
 ) -> float:
     """Classification evaluation scenario
@@ -25,8 +26,9 @@ def evaluate_classification(
     Args:
         table: dataset table with labels to evaluate on
         transformer: preprocess module
-        body: CNN to evaluate
-        head: classifier module
+        body: body module
+        neck: neck module
+        head: head module
         batch_size: inference batch size
         verbose: verbosity boolean flag
 
@@ -41,6 +43,7 @@ def evaluate_classification(
     loader = DataLoader(dataset=dataset, batch_sampler=sampler)
 
     body = body.eval()
+    neck = neck.eval()
     head = head.eval()
 
     progress_bar = tqdm(total=len(dataset)) if verbose else None
@@ -49,8 +52,9 @@ def evaluate_classification(
     with torch.no_grad():
         for batch, _ in loader:
             descriptors = body(batch)
-            scores = head(descriptors)
-            predictions.append(scores.argmax(dim=1))
+            descriptors = neck(descriptors)
+            logits = head(descriptors)
+            predictions.append(logits.argmax(dim=1))
             if progress_bar is not None:
                 progress_bar.update(len(batch))
 

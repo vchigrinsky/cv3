@@ -54,13 +54,16 @@ class ImageTable(Table):
     """Table of images, must have "id" column
     """
 
-    def __init__(self, source: DataFrame, prefix: str):
+    def __init__(self, source: DataFrame, prefix: str, mode: str = 'rgb'):
         """Creates table of images
 
         Args:
             source: table source, must have "id" column
             prefix: common prefix for images to read
+            mode: in which mode read images, "rgb" or "gray"
         """
+
+        assert mode in {'rgb', 'gray'}
 
         Table.__init__(self, source)
 
@@ -68,6 +71,13 @@ class ImageTable(Table):
         self.ids = list(self.dataframe.id)
 
         self.prefix = prefix
+
+        if mode == 'rgb':
+            self.channels = 3
+        elif mode == 'gray':
+            self.channels = 1
+        else:
+            raise NotImplementedError
 
     def __getitem__(self, index: int) -> Image:
         """Gets image
@@ -81,10 +91,17 @@ class ImageTable(Table):
         assert osp.exists(path), f'{path} is missing'
         assert path.endswith('.png'), 'image on disk must be PNG'
 
-        return Image(torchvision.io.read_image(path))
+        if self.channels == 3:
+            mode = torchvision.io.image.ImageReadMode.RGB
+        elif self.channels == 1:
+            mode = torchvision.io.image.ImageReadMode.GRAY
+        else:
+            raise NotImplementedError
+
+        return Image(torchvision.io.read_image(path, mode))
 
     @classmethod
-    def read(cls, path: str, prefix: str):
+    def read(cls, path: str, prefix: str, mode: str = 'rgb'):
         """Reads image table from disk
 
         Args:
@@ -102,21 +119,22 @@ class LabeledImageTable(ImageTable):
     """Table of images with labels, must have "id" and "label" columns
     """
 
-    def __init__(self, source: DataFrame, prefix: str):
+    def __init__(self, source: DataFrame, prefix: str, mode: str = 'rgb'):
         """Creates table of images with labels
 
         Args:
             source: table source, must have "id" and "label" column
             prefix: common prefix for images to read
+            mode: in which mode read images, "rgb" or "gray"
         """
 
-        ImageTable.__init__(self, source, prefix)
+        ImageTable.__init__(self, source, prefix, mode)
 
         assert 'label' in self.columns, \
             'labeled image table should have "label" column'
         self.labels = list(self.dataframe.label)
         self.map_labels_to_range()
-        self.n_classes = len(self.labels.unique())
+        self.classes = len(self.labels.unique())
 
         self.prefix = prefix
 
