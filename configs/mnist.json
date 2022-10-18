@@ -1,38 +1,60 @@
 {
     "train_table": {
         "type": "default",
-        "path": "/home/v/cv3/data/mnist/train.csv",
-        "prefix": "/home/v/cv3/data/mnist/train"
+        "path": "/Users/v/cv3/data/mnist/train.csv",
+        "prefix": "/Users/v/cv3/data/mnist/train",
+        "mode": "gray"
     },
     "train_transformer": {
         "type": "default",
-        "height": 28,
-        "width": 28,
-        "mean": [0.1309, 0.1309, 0.1309],
-        "std": [0.3084, 0.3084, 0.3084]
+        "height": 32,
+        "width": 32,
+        "mean": 0.1309,
+        "std": 0.3084,
+        "crop_height": 28,
+        "crop_width": 28
     },
     "train_sampler": {
         "type": "default",
         "drop_last": false,
-        "batch_size": 2,
-        "workers": 0
+        "workers": 0,
+        "batch_size": 16
     },
     "body": {
         "type": "default",
-        "descriptor_size": 128
+        "conv_bias": false,
+        "init_weights": true
     },
     "head": {
-        "type": "default"
+        "type": "default",
+        "descriptor_size": 128,
+        "init_weights": true
+    },
+    "loss": {
+        "type": "xent"
     },
     "optimizer": {
         "type": "default",
-        "lr": 0.01
+        "lr": 0.01,
+        "weight_decay": 0.0005,
+        "momentum": 0.9,
+        "nesterov": true
     },
     "scheduler": {
-        "type": "default",
-        "epochs": 1
-    },
-    "loss": {
-        "type": "default"
+        "type": "sequential",
+        "schedulers": [
+            {
+                "type": "cosine",
+                "epochs": 1,
+                "start": 0.0,
+                "stop": 1.0
+            },
+            {
+                "type": "cosine",
+                "epochs": 7,
+                "start": 1.0,
+                "stop": 0.0
+            }
+        ]
     }
 }

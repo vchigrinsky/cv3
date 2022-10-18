@@ -13,7 +13,8 @@ from .convnet import ConvNet
 from .head import Neck, Head
 
 from torch.optim import Optimizer, SGD
-from .scheduler import Scheduler, LinearScheduler
+from .scheduler import Scheduler, SequentialScheduler, \
+    LinearScheduler, CosineScheduler
 
 from torch.nn.modules.loss import CrossEntropyLoss
 
@@ -271,17 +272,47 @@ def parse_config(config: dict) -> (
     if scheduler_type == 'default':
         scheduler_type = 'constant'
 
-    epochs = config['scheduler'].pop('epochs')
-    steps = epochs * len(train_table)
+    if scheduler_type == 'sequential':
+        schedulers = list()
+        for scheduler in config['scheduler']['schedulers']:
+            scheduler_type = scheduler.pop('type')
+            if scheduler_type == 'default':
+                scheduler_type = 'constant'
 
-    if scheduler_type == 'constant':
-        scheduler = Scheduler(steps, lr, **config['scheduler'])
+            epochs = scheduler.pop('epochs')
+            steps = epochs * len(train_table)
 
-    elif scheduler_type == 'linear':
-        scheduler = LinearScheduler(steps, lr, **config['scheduler'])
+            if scheduler_type == 'constant':
+                scheduler = Scheduler(steps, lr, **scheduler)
+
+            elif scheduler_type == 'linear':
+                scheduler = LinearScheduler(steps, lr, **scheduler)
+
+            elif scheduler_type == 'cosine':
+                scheduler = CosineScheduler(steps, lr, **scheduler)
+
+            else:
+                raise NotImplementedError
+
+            schedulers.append(scheduler)
+
+        scheduler = SequentialScheduler(*schedulers, lr=lr)
 
     else:
-        raise NotImplementedError
+        epochs = config['scheduler'].pop('epochs')
+        steps = epochs * len(train_table)
+
+        if scheduler_type == 'constant':
+            scheduler = Scheduler(steps, lr, **config['scheduler'])
+
+        elif scheduler_type == 'linear':
+            scheduler = LinearScheduler(steps, lr, **config['scheduler'])
+
+        elif scheduler_type == 'cosine':
+            scheduler = CosineScheduler(steps, lr, **config['scheduler'])
+
+        else:
+            raise NotImplementedError
 
     manager.plot_lr_schedule(scheduler)
 

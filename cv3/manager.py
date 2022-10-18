@@ -71,8 +71,6 @@ class Manager:
             attribute: attribute name, i.e. "train_loss" or "lr"
         """
 
-        logging.info(f'plotting {osp.join(self.root, f"{attribute}.html")}')
-
         table = self.get_info()
 
         x = table.dataframe.step.values
@@ -116,16 +114,12 @@ class Manager:
             head_weights: model head state dict
         """
 
-        logging.info(f'saving {osp.join(self.root, "weights.*.pth")}')
-
         torch.save(body_weights, osp.join(self.root, 'weights.body.pth'))
         torch.save(head_weights, osp.join(self.root, 'weights.head.pth'))
 
     def save_info(self):
         """Dumps experiment info to "ROOT/info.csv"
         """
-
-        logging.info(f'saving {osp.join(self.root, "info.csv")}')
 
         table = self.get_info()
         table.dataframe.to_csv(osp.join(self.root, 'info.csv'), index=False)
@@ -220,8 +214,6 @@ class Manager:
         """Creates empty experiment directory
         """
 
-        logging.info(f'creating {self.root}')
-
         os.mkdir(self.root)
 
     def clear_experiment_root(self):
@@ -236,8 +228,6 @@ class Manager:
         """Initialize experiment with config file
         """
 
-        logging.info(f'saving {osp.join(self.root, "config.json")}')
-
         with open(osp.join(self.root, 'config.json'), 'w') as f:
             json.dump(self.config, f, indent=4)
 
@@ -247,8 +237,6 @@ class Manager:
         Args:
             scheduler: learning rate scheduler
         """
-
-        logging.info(f'plotting {osp.join(self.root, "lr_schedule.html")}')
 
         x = list(range(scheduler.steps))
         y = scheduler.schedule
