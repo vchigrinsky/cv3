@@ -6,7 +6,9 @@ import cv3.table
 import cv3.transformer
 import cv3.dataset
 import cv3.sampler
+import cv3.stem
 import cv3.convnet
+import cv3.neck
 import cv3.head
 import cv3.scheduler
 import cv3.manager

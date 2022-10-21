@@ -3,6 +3,8 @@
 
 import math
 
+from tqdm import tqdm
+
 
 class Scheduler:
     """Learning rate scheduler
@@ -19,7 +21,7 @@ class Scheduler:
         assert steps > 0, 'steps must be greater than zero'
 
         self.lr_base = lr
-        self.steps = steps
+        self._steps = steps
 
         self.schedule = self.generate_schedule()
 
@@ -33,32 +35,13 @@ class Scheduler:
         """Generate learning rate schedule
         """
 
-        return [self.lr_base for _ in range(self.steps)]
+        return [self.lr_base for _ in range(self._steps)]
 
-
-class SequentialScheduler(Scheduler):
-    """Sequence of schedulers
-    """
-
-    def __init__(self, *schedulers, lr: float):
-        """Combine several schedulers into a single one
+    def __len__(self) -> int:
+        """Schedule length
         """
 
-        steps = sum([scheduler.steps for scheduler in schedulers])
-
-        self.schedulers = schedulers
-
-        super().__init__(steps, lr)
-
-    def generate_schedule(self) -> list:
-        """Stack learning rate schedules
-        """
-
-        schedule = list()
-        for scheduler in self.schedulers:
-            schedule.extend(scheduler.schedule)
-
-        return schedule
+        return len(self.schedule)
 
 
 class LinearScheduler(Scheduler):
@@ -95,8 +78,8 @@ class LinearScheduler(Scheduler):
         """
 
         schedule = list()
-        for step in range(self.steps):
-            x = self.start + (step / self.steps) * (self.stop - self.start)
+        for step in range(self._steps):
+            x = self.start + (step / self._steps) * (self.stop - self.start)
             if self.start > self.stop:
                 schedule.append(self.lr_base * x)
             else:
@@ -140,10 +123,35 @@ class CosineScheduler(Scheduler):
         """
 
         schedule = list()
-        for step in range(self.steps):
+        for step in range(self._steps):
             x = (math.pi / 2) * (
-                self.start + (step / self.steps) * (self.stop - self.start)
+                self.start + (step / self._steps) * (self.stop - self.start)
             )
             schedule.append(self.lr_base * math.sin(x))
+
+        return schedule
+
+
+class SequentialScheduler(Scheduler):
+    """Sequence of schedulers
+    """
+
+    def __init__(self, *schedulers, lr: float):
+        """Combine several schedulers into a single one
+        """
+
+        steps = sum([len(scheduler) for scheduler in schedulers])
+
+        self.schedulers = schedulers
+
+        super().__init__(steps, lr)
+
+    def generate_schedule(self) -> list:
+        """Stack learning rate schedules
+        """
+
+        schedule = list()
+        for scheduler in self.schedulers:
+            schedule.extend(scheduler.schedule)
 
         return schedule

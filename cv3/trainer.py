@@ -1,16 +1,21 @@
 """Train model
 """
 
+import math
+
 from .table import LabeledImageTable
 from .transformer import Transformer
 from .dataset import Dataset
-from .sampler import Sampler, RandomSampler
+from .sampler import Sampler, ShuffledSampler
 from torch.utils.data import DataLoader
 
 import torch
 from torch import nn
+
+from .stem import Stem
 from .convnet import ConvNet
-from .head import Neck, Head
+from .neck import Neck
+from .head import Head
 
 from torch.optim import Optimizer, SGD
 from .scheduler import Scheduler, SequentialScheduler, \
@@ -22,12 +27,10 @@ from .manager import Manager
 
 from tqdm import tqdm
 
-import os.path as osp
-
 
 def train(
     train_table: LabeledImageTable, train_loader: DataLoader,
-    body: nn.Module, neck: nn.Module, head: nn.Module,
+    stem: nn.Module, body: nn.Module, neck: nn.Module, head: nn.Module,
     optimizer: Optimizer, scheduler: Scheduler,
     loss_module: nn.Module,
     manager: Manager
@@ -37,6 +40,7 @@ def train(
     Args:
         train_table: labeled image table for training
         train_loader: dataloader of train dataset
+        stem: stem module
         body: body module
         neck: neck module
         head: head module
@@ -46,12 +50,11 @@ def train(
         manager: experiment helper
     """
 
-    assert scheduler.steps % len(train_table) == 0, \
-        'number of steps should be divisible by train dataset length'
-    epochs = scheduler.steps // len(train_table)
+    epochs = len(scheduler) // len(train_table)
 
-    progress_bar = tqdm(total=scheduler.steps)
+    progress_bar = tqdm(total=len(scheduler))
 
+    stem = stem.train()
     body = body.train()
     neck = neck.train()
     head = head.train()
@@ -69,8 +72,9 @@ def train(
                 parameters_group['lr'] = lr
             optimizer.zero_grad()
 
-            descriptors = body(batch)
-            descriptors = neck(descriptors)
+            feature_map = stem(batch)
+            feature_map = body(feature_map)
+            descriptors = neck(feature_map)
             logits = head(descriptors)
 
             loss = loss_module(logits, labels)
@@ -90,32 +94,34 @@ def train(
             optimizer.step()
             step += len(batch)
 
-            manager.update_info(info)
+            # manager.update_info(info)
             progress_bar.update(len(batch))
 
     progress_bar.close()
 
-    manager.save_info()
+    # manager.save_info()
 
-    for attribute in manager.attributes:
-        manager.plot_attribute_info(attribute)
+    # for attribute in manager.attributes:
+    #     manager.plot_attribute_info(attribute)
 
+    stem = stem.eval()
     body = body.eval()
     neck = neck.eval()
     head = head.eval()
 
-    body_weights = body.state_dict()
-    body_weights.update(neck.state_dict())
-    head_weights = head.state_dict()
-
-    manager.save_weights(body_weights, head_weights)
+    manager.save_weights(
+        stem.state_dict(), 
+        body.state_dict(), 
+        neck.state_dict(), 
+        head.state_dict()
+    )
 
 # -----------------------------------------------------------------------------
 
 
 def parse_config(config: dict) -> (
     LabeledImageTable, DataLoader,
-    nn.Module, nn.Module, nn.Module,
+    nn.Module, nn.Module, nn.Module, nn.Module,
     Optimizer, Scheduler,
     nn.Module
 ):
@@ -126,7 +132,7 @@ def parse_config(config: dict) -> (
 
     Returns:
         train table, train loader, 
-        body module, neck module, head module,
+        stem, body, neck, head modules,
         optimizer, scheduler,
         loss module
     """
@@ -160,9 +166,21 @@ def parse_config(config: dict) -> (
     train_transformer_type = config['train_transformer'].pop('type')
 
     if train_transformer_type == 'default':
-        train_transformer = Transformer(
-            mode='train', **config['train_transformer']
-        )
+        if 'transforms' in config['train_transformer']:
+            transforms = config['train_transformer'].pop('transforms')
+        else:
+            transforms = list()
+
+        train_transformer = Transformer(**config['train_transformer'])
+
+        for transform in transforms:
+            transform_type = transform.pop('type')
+
+            if transform_type == 'random_crop':
+                train_transformer.add_random_crop(**transform)
+
+            else:
+                raise NotImplementedError
 
     else:
         raise NotImplementedError
@@ -170,16 +188,13 @@ def parse_config(config: dict) -> (
     # >>>>> train loader
     train_dataset = Dataset(train_table, train_transformer)
 
-    batch_size = config['train_sampler'].pop('batch_size')
-
     train_loader_workers = config['train_sampler'].pop('workers')
 
     train_sampler_type = config['train_sampler'].pop('type')
 
     if train_sampler_type == 'default':
-        train_sampler = RandomSampler(
+        train_sampler = ShuffledSampler(
             length=len(train_dataset), 
-            batch_size=batch_size,
             **config['train_sampler']
         )
 
@@ -193,43 +208,35 @@ def parse_config(config: dict) -> (
     )
 
     # >>>>> model
-    body_type = config['body'].pop('type')
+    stem_type = config['stem'].pop('type')
 
-    # descriptor size in body config is deprecated
-    if 'descriptor_size' in config['body']:
-        config['head']['descriptor_size'] \
-            = config['body'].pop('descriptor_size')
-
-    if body_type == 'default':
-        body = ConvNet(channels=train_table.channels, **config['body'])
+    if stem_type == 'default':
+        stem = Stem(in_channels=train_table.channels, **config['stem'])
 
     else:
         raise NotImplementedError
 
-    hidden_descriptor_size = None
-    for layer in body.modules():        
-        if isinstance(layer, nn.Conv2d):
-            hidden_descriptor_size = layer.out_channels
+    body_type = config['body'].pop('type')
+
+    if body_type == 'convnet':
+        body = ConvNet(in_channels=stem.conv.out_channels, **config['body'])
+
+    else:
+        raise NotImplementedError
+
+    neck_type = config['neck'].pop('type')
+
+    if neck_type == 'default':
+        neck = Neck(in_channels=body.descriptor_size, **config['neck'])
+
+    else:
+        raise NotImplementedError
 
     head_type = config['head'].pop('type')
 
-    descriptor_size = config['head'].pop('descriptor_size')
-
     if head_type == 'default':
-        neck = Neck(
-            channels=hidden_descriptor_size,
-            descriptor_size=descriptor_size,
-            linear_bias=(
-                config['body']['conv_bias'] 
-                if 'conv_bias' in config['body'] else True
-            ),
-            init_weights=(
-                config['body']['init_weights'] 
-                if 'init_weights' in config['body'] else False
-            )
-        )
         head = Head(
-            descriptor_size=descriptor_size,
+            descriptor_size=neck.descriptor_size,
             classes=train_table.classes,
             **config['head']
         )
@@ -239,9 +246,7 @@ def parse_config(config: dict) -> (
 
     # >>>>> loss
     loss_type = config['loss'].pop('type')
-    if loss_type == 'default':
-        loss_type = 'xent'
-
+    
     if loss_type == 'xent':
         loss_module = CrossEntropyLoss(**config['loss'])
 
@@ -250,14 +255,13 @@ def parse_config(config: dict) -> (
 
     # >>>>> optimizer
     optimizer_type = config['optimizer'].pop('type')
-    if optimizer_type == 'default':
-        optimizer_type = 'sgd'
 
     lr = config['optimizer'].pop('lr')
 
     if optimizer_type == 'sgd':
         optimizer = SGD(
             [
+                {'params': stem.parameters()},
                 {'params': body.parameters()}, 
                 {'params': neck.parameters()},
                 {'params': head.parameters()}
@@ -269,27 +273,41 @@ def parse_config(config: dict) -> (
 
     # >>>>> scheduler
     scheduler_type = config['scheduler'].pop('type')
-    if scheduler_type == 'default':
-        scheduler_type = 'constant'
+
+    epochs = config['scheduler'].pop('epochs')
 
     if scheduler_type == 'sequential':
         schedulers = list()
         for scheduler in config['scheduler']['schedulers']:
             scheduler_type = scheduler.pop('type')
-            if scheduler_type == 'default':
-                scheduler_type = 'constant'
+            
+            if 'steps' in scheduler:
+                steps = scheduler.pop('steps')
 
-            epochs = scheduler.pop('epochs')
-            steps = epochs * len(train_table)
+            elif 'epochs' in scheduler:
+                steps = len(train_table) * scheduler.pop('epochs')
+
+            elif 'fraction' in scheduler:
+                steps = math.ceil(
+                    len(train_table) * epochs * scheduler.pop('fraction')
+                )
+
+            else:
+                raise KeyError(
+                    'scheduler must have either "steps" or "epochs" argument'
+                )
+
+            if 'lr' not in scheduler:
+                scheduler['lr'] = lr
 
             if scheduler_type == 'constant':
-                scheduler = Scheduler(steps, lr, **scheduler)
+                scheduler = Scheduler(steps, **scheduler)
 
             elif scheduler_type == 'linear':
-                scheduler = LinearScheduler(steps, lr, **scheduler)
+                scheduler = LinearScheduler(steps, **scheduler)
 
             elif scheduler_type == 'cosine':
-                scheduler = CosineScheduler(steps, lr, **scheduler)
+                scheduler = CosineScheduler(steps, **scheduler)
 
             else:
                 raise NotImplementedError
@@ -299,26 +317,38 @@ def parse_config(config: dict) -> (
         scheduler = SequentialScheduler(*schedulers, lr=lr)
 
     else:
-        epochs = config['scheduler'].pop('epochs')
-        steps = epochs * len(train_table)
+        if 'steps' in config['scheduler']:
+            steps = config['scheduler'].pop('steps')
+
+        else:
+            steps = epochs * len(train_table)
+
+        if 'lr' not in config['scheduler']:
+            config['scheduler']['lr'] = lr
 
         if scheduler_type == 'constant':
-            scheduler = Scheduler(steps, lr, **config['scheduler'])
+            scheduler = Scheduler(steps, **config['scheduler'])
 
         elif scheduler_type == 'linear':
-            scheduler = LinearScheduler(steps, lr, **config['scheduler'])
+            scheduler = LinearScheduler(steps, **config['scheduler'])
 
         elif scheduler_type == 'cosine':
-            scheduler = CosineScheduler(steps, lr, **config['scheduler'])
+            scheduler = CosineScheduler(steps, **config['scheduler'])
 
         else:
             raise NotImplementedError
 
-    manager.plot_lr_schedule(scheduler)
+    assert len(scheduler) >= epochs * len(train_table), \
+        'schedule must be longer than train steps'
+
+    if len(scheduler) > epochs * len(train_table):
+        scheduler.schedule = scheduler.schedule[: epochs * len(train_table)]
+
+    # manager.plot_lr_schedule(scheduler)
 
     return (
         train_table, train_loader,
-        body, neck, head,
+        stem, body, neck, head,
         optimizer, scheduler,
         loss_module,
         manager

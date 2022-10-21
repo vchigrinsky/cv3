@@ -105,16 +105,23 @@ class Manager:
         fig.write_html(osp.join(self.root, f'{attribute}.html'))
 
     def save_weights(
-        self, body_weights: OrderedDict, head_weights: OrderedDict
+        self, stem_weights: OrderedDict,
+        body_weights: OrderedDict, 
+        neck_weights: OrderedDict, 
+        head_weights: OrderedDict
     ):
         """Save model state dicts (body and head) to the experiment directory
 
         Args:
+            stem_weights: model stem state dict
             body_weights: model body state dict
+            neck_weights: model neck state dict
             head_weights: model head state dict
         """
 
+        torch.save(stem_weights, osp.join(self.root, 'weights.stem.pth'))
         torch.save(body_weights, osp.join(self.root, 'weights.body.pth'))
+        torch.save(neck_weights, osp.join(self.root, 'weights.neck.pth'))
         torch.save(head_weights, osp.join(self.root, 'weights.head.pth'))
 
     def save_info(self):
@@ -238,7 +245,7 @@ class Manager:
             scheduler: learning rate scheduler
         """
 
-        x = list(range(scheduler.steps))
+        x = list(range(len(scheduler)))
         y = scheduler.schedule
 
         xaxis = go.layout.XAxis(

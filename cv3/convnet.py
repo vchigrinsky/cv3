@@ -13,49 +13,41 @@ class ConvNet(nn.Module):
     """
 
     def __init__(
-        self, channels: int = 3, 
-        conv_bias: bool = True,
-        init_weights: bool = False,
-        descriptor_size: int = None  # deprecated
+        self, in_channels: int, init_weights: bool = True,
     ):
         """Creates base convolutional model
 
         Args:
             channels: input channels, 3 or 1
-            conv_bias: bias in convolutional layer flag
             init_weights: resnet-style weights initialization flag
-            descriptor_size: deprecated
         """
 
         super().__init__()
 
-        self.conv1 = nn.Conv2d(channels, 16, 7, bias=conv_bias)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.conv1 = nn.Conv2d(in_channels, 32, 3, bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
         self.relu1 = nn.ReLU()
 
-        self.conv2 = nn.Conv2d(16, 32, 5, bias=conv_bias)
-        self.bn2 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 3, bias=False)
+        self.bn2 = nn.BatchNorm2d(64)
         self.relu2 = nn.ReLU()
         self.pool2 = nn.MaxPool2d(2, 2)
 
-        self.conv3 = nn.Conv2d(32, 64, 3, bias=conv_bias)
+        self.conv3 = nn.Conv2d(64, 64, 3, bias=False)
         self.bn3 = nn.BatchNorm2d(64)
         self.relu3 = nn.ReLU()
-
-        self.conv4 = nn.Conv2d(64, 64, 3, bias=conv_bias)
-        self.bn4 = nn.BatchNorm2d(64)
-        self.relu4 = nn.ReLU()
 
         if init_weights:
             self.init_weights()
 
+        self.descriptor_size = 64
+
     def init_weights(self):
-        """Performs ResNet-style weight initialization
+        """Initialize weights
         """
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                # Note that there is no bias due to BN
                 fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 nn.init.normal_(
                     m.weight, mean=0.0, std=math.sqrt(2.0 / fan_out)
@@ -84,9 +76,5 @@ class ConvNet(nn.Module):
         x = self.conv3(x)
         x = self.bn3(x)
         x = self.relu3(x)
-
-        x = self.conv4(x)
-        x = self.bn4(x)
-        x = self.relu4(x)
 
         return x

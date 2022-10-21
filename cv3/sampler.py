@@ -48,12 +48,12 @@ class Sampler(TorchSampler):
             yield batch
 
 
-class RandomSampler(Sampler):
-    """Random batch sampler
+class ShuffledSampler(Sampler):
+    """Shuffled batch sampler
     """
 
     def __init__(self, length: int, batch_size: int, drop_last: bool = False):
-        """Creates random sampler
+        """Creates shuffled sampler
 
         Args:
             length: dataset length

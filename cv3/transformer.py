@@ -12,45 +12,51 @@ class Transformer:
     """
 
     def __init__(
-        self, height: int, width: int, 
-        mean: (float, float, float) or float, 
-        std: (float, float, float) or float,
-        crop_height: int = None, crop_width: int = None,
-        mode: str = 'train'
+        self, 
+        resize: (int, int) or int = None,
+        crop: (int, int) or int = None,
+        mean: (float, float, float) or float = None, 
+        std: (float, float, float) or float = None
     ):
         """Creates empty transformer
 
         Args:
-            height: resize height
-            width: resize width
+            resize: [height, width], if a single value 
+                is passed then the smallest side will be fitted to this
+            crop: center crop size, [height, width], if a single value 
+                is passed then it is height = width
             mean: normalization mean
             std: normalization std
-            crop_height: crop height
-            crop_width: crop width
-            mode: train or test
         """
 
-        assert mode in {'train', 'test'}
+        if resize is not None:
+            self.resize = torchvision.transforms.Resize(resize)
+        else:
+            self.resize = None
 
-        if crop_height is None:
-            crop_height = height
-        if crop_width is None:
-            crop_width = width
+        if crop is not None:
+            self.crop = torchvision.transforms.CenterCrop(crop)
+        else:
+            self.crop = None
 
-        self.resize = torchvision.transforms.Resize(size=[height, width])
-
-        if mode == 'train':
-            self.crop = torchvision.transforms.RandomCrop(
-                size=[crop_height, crop_width]
-            )
-        elif mode == 'test':
-            self.crop = torchvision.transforms.CenterCrop(
-                size=[crop_height, crop_width]
-            )
-
-        self.normalize = torchvision.transforms.Normalize(mean=mean, std=std)
+        if mean is not None and std is not None:
+            self.normalize = torchvision.transforms.Normalize(mean, std)
+        else:
+            self.normalize = None
 
         self.transforms = list()
+
+    def add_random_crop(self, size: (int, int) or int, **kwargs):
+        """Creates torchvision.transforms.RandomCrop and adds it to transforms
+
+        Args:
+            size: [height, width] or height = width if a single value is passed
+            **kwargs: torchvision.transforms.RandomCrop args
+        """
+
+        self.transforms.append(
+            torchvision.transforms.RandomCrop(size, **kwargs)
+        )
 
     def __call__(self, tensor: Tensor) -> Tensor:
         """Pass input tensor through transforms
@@ -62,13 +68,18 @@ class Transformer:
             tensor after transforms
         """
 
-        tensor = self.resize(tensor)
-        tensor = self.crop(tensor)
+        if self.resize is not None:
+            tensor = self.resize(tensor)
+
+        if self.crop is not None:
+            tensor = self.crop(tensor)
 
         for transform in self.transforms:
-            pass
+            tensor = transform(tensor)
 
         tensor = tensor.to(torch.float32).div(255.)
-        tensor = self.normalize(tensor)
+        
+        if self.normalize is not None:
+            tensor = self.normalize(tensor)
 
         return tensor
