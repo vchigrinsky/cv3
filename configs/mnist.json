@@ -7,54 +7,69 @@
     },
     "train_transformer": {
         "type": "default",
-        "height": 32,
-        "width": 32,
+        "resize": 32,
         "mean": 0.1309,
         "std": 0.3084,
-        "crop_height": 28,
-        "crop_width": 28
+        "transforms": [
+            {
+                "type": "random_crop",
+                "size": 28
+            }
+        ]
     },
     "train_sampler": {
         "type": "default",
+        "batch_size": 128,
         "drop_last": false,
-        "workers": 0,
-        "batch_size": 16
+        "workers": 0
+    },
+    "stem": {
+        "type": "default",
+        "out_channels": 16
     },
     "body": {
+        "type": "convnet"
+    },
+    "neck": {
         "type": "default",
-        "conv_bias": false,
-        "init_weights": true
+        "descriptor_size": 128
     },
     "head": {
-        "type": "default",
-        "descriptor_size": 128,
-        "init_weights": true
+        "type": "default"
     },
     "loss": {
         "type": "xent"
     },
     "optimizer": {
-        "type": "default",
-        "lr": 0.01,
+        "type": "sgd",
+        "lr": 0.1,
         "weight_decay": 0.0005,
         "momentum": 0.9,
         "nesterov": true
     },
     "scheduler": {
         "type": "sequential",
+        "epochs": 512,
         "schedulers": [
             {
                 "type": "cosine",
-                "epochs": 1,
+                "fraction": 0.05,
                 "start": 0.0,
                 "stop": 1.0
             },
             {
                 "type": "cosine",
-                "epochs": 7,
+                "fraction": 0.95,
                 "start": 1.0,
                 "stop": 0.0
             }
         ]
+    },
+    "test_transformer": {
+        "type": "default",
+        "resize": 32,
+        "crop": 28,
+        "mean": 0.1309,
+        "std": 0.3084
     }
 }
