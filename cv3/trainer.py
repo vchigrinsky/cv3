@@ -59,10 +59,12 @@ def train(
     neck = neck.train()
     head = head.train()
 
+    schedule = iter(scheduler)
+
     step = 0
     for epoch in range(epochs):
         for batch, labels in train_loader:
-            lr = scheduler.lr(step)
+            lr = next(schedule)
             
             info = dict()
             info['step'] = step
@@ -94,15 +96,15 @@ def train(
             optimizer.step()
             step += len(batch)
 
-            # manager.update_info(info)
+            manager.update_info(info)
             progress_bar.update(len(batch))
 
     progress_bar.close()
 
-    # manager.save_info()
+    manager.save_info()
 
-    # for attribute in manager.attributes:
-    #     manager.plot_attribute_info(attribute)
+    for attribute in manager.attributes:
+        manager.plot_attribute_info(attribute)
 
     stem = stem.eval()
     body = body.eval()
@@ -342,9 +344,9 @@ def parse_config(config: dict) -> (
         'schedule must be longer than train steps'
 
     if len(scheduler) > epochs * len(train_table):
-        scheduler.schedule = scheduler.schedule[: epochs * len(train_table)]
+        scheduler.steps = epochs * len(train_table)
 
-    # manager.plot_lr_schedule(scheduler)
+    manager.plot_lr_schedule(scheduler)
 
     return (
         train_table, train_loader,

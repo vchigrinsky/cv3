@@ -1,6 +1,8 @@
 """Experiment manager
 """
 
+import math
+
 import sys
 import os
 import os.path as osp
@@ -64,17 +66,34 @@ class Manager:
 
         return attributes
 
-    def plot_attribute_info(self, attribute: str):
+    def plot_attribute_info(
+        self, attribute: str, 
+        points: int = 1024, margin: float = 0.1
+    ):
         """Plots info for specific attribute
 
         Args:
             attribute: attribute name, i.e. "train_loss" or "lr"
+            points: number of points to plot
+            margin: top margin of the float (leave default if confused)
         """
+
+        logging.info(f'plotting {attribute}')
 
         table = self.get_info()
 
-        x = table.dataframe.step.values
-        y = table.dataframe[attribute].values
+        step = math.ceil(len(table) / points)
+
+        x, y = list(), list()
+        for n, value in zip(
+            table.dataframe.step.values, table.dataframe[attribute].values
+        ):
+            if n % step == 0:
+                x.append(n)
+                y.append(value)
+
+        x = np.asarray(x)
+        y = np.asarray(y)
 
         xaxis = go.layout.XAxis(
             title='Images seen', 
@@ -84,12 +103,16 @@ class Manager:
         x = x[~np.isnan(y)]
         y = y[~np.isnan(y)]
 
+        if attribute.endswith('loss'):
+            bottom = 0.0
+        else:
+            bottom = y.min() - (y.max() - y.min()) * margin
+
+        top = y.max() + (y.max() - y.min()) * margin
+
         yaxis = go.layout.YAxis(
             title=attribute.replace('_', ' ').title(), 
-            range=[
-                y.min() - (y.max() - y.min()) * 0.1, 
-                y.max() + (y.max() - y.min()) * 0.1
-            ]
+            range=[bottom, top]
         )
 
         layout = go.Layout(
@@ -238,15 +261,27 @@ class Manager:
         with open(osp.join(self.root, 'config.json'), 'w') as f:
             json.dump(self.config, f, indent=4)
 
-    def plot_lr_schedule(self, scheduler: Scheduler):
+    def plot_lr_schedule(
+        self, scheduler: Scheduler, 
+        points: int = 1024, margin: float = 0.1
+    ):
         """Plots lr scheduler and saves plot as html file in experiment root
 
         Args:
             scheduler: learning rate scheduler
+            points: number of points to plot
+            margin: top margin of the float (leave default if confused)
         """
 
-        x = list(range(len(scheduler)))
-        y = scheduler.schedule
+        logging.info('plotting lr schedule')
+
+        step = math.ceil(len(scheduler) / points)
+
+        x, y = list(), list()
+        for n, lr in enumerate(scheduler):
+            if n % step == 0:
+                x.append(n)
+                y.append(lr)
 
         xaxis = go.layout.XAxis(
             title='Images seen', 
@@ -254,7 +289,7 @@ class Manager:
         )
         yaxis = go.layout.YAxis(
             title='Learning rate', 
-            range=[0.0, 1.1 * scheduler.lr_base]
+            range=[0.0, (1.0 + margin) * max(y)]
         )
 
         layout = go.Layout(

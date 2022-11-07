@@ -21,27 +21,20 @@ class Scheduler:
         assert steps > 0, 'steps must be greater than zero'
 
         self.lr_base = lr
-        self._steps = steps
-
-        self.schedule = self.generate_schedule()
-
-    def lr(self, step: int) -> float:
-        """Get lerning rate by step 
-        """
-
-        return self.schedule[step]
-
-    def generate_schedule(self) -> list:
-        """Generate learning rate schedule
-        """
-
-        return [self.lr_base for _ in range(self._steps)]
+        self.steps = steps
 
     def __len__(self) -> int:
         """Schedule length
         """
 
-        return len(self.schedule)
+        return self.steps
+
+    def __iter__(self):
+        """Generates lr step by step
+        """
+
+        for _ in range(len(self)):
+            yield self.lr_base
 
 
 class LinearScheduler(Scheduler):
@@ -66,26 +59,23 @@ class LinearScheduler(Scheduler):
             stop: relative right clip at [0, 1]
         """
 
+        super().__init__(steps, lr)
+
         assert not math.isclose(start, stop), 'start and stop must not be equal'
 
         self.start = start
         self.stop = stop
 
-        super().__init__(steps, lr)
-
-    def generate_schedule(self) -> list:
-        """Generate linear learning rate schedule (see __init__ docstring)
+    def __iter__(self):
+        """Generates lr step by step according to the linear rule
         """
 
-        schedule = list()
-        for step in range(self._steps):
-            x = self.start + (step / self._steps) * (self.stop - self.start)
+        for _ in range(len(self)):
+            x = self.start + (step / len(self)) * (self.stop - self.start)
             if self.start > self.stop:
-                schedule.append(self.lr_base * x)
+                yield self.lr_base * x
             else:
-                schedule.append(self.lr_base * (1.0 - x))
-
-        return schedule
+                yield self.lr_base * (1.0 - x)
 
 
 class CosineScheduler(Scheduler):
@@ -111,25 +101,22 @@ class CosineScheduler(Scheduler):
             stop: relative right clip at [0, pi/2]
         """
 
+        super().__init__(steps, lr)
+
         assert not math.isclose(start, stop), 'start and stop must not be equal'
 
         self.start = start
         self.stop = stop
 
-        super().__init__(steps, lr)
-
-    def generate_schedule(self) -> list:
-        """Generate linear learning rate schedule (see __init__ docstring)
+    def __iter__(self):
+        """Generates lr step by step according to the cosine rule
         """
 
-        schedule = list()
-        for step in range(self._steps):
+        for step in range(len(self)):
             x = (math.pi / 2) * (
-                self.start + (step / self._steps) * (self.stop - self.start)
+                self.start + (step / len(self)) * (self.stop - self.start)
             )
-            schedule.append(self.lr_base * math.sin(x))
-
-        return schedule
+            yield self.lr_base * math.sin(x)
 
 
 class SequentialScheduler(Scheduler):
@@ -142,16 +129,18 @@ class SequentialScheduler(Scheduler):
 
         steps = sum([len(scheduler) for scheduler in schedulers])
 
-        self.schedulers = schedulers
-
         super().__init__(steps, lr)
 
-    def generate_schedule(self) -> list:
-        """Stack learning rate schedules
+        self.schedulers = schedulers
+
+    def __iter__(self):
+        """Iterate over concatenation of schedulers
         """
 
-        schedule = list()
+        step = 0
         for scheduler in self.schedulers:
-            schedule.extend(scheduler.schedule)
-
-        return schedule
+            for lr in scheduler:
+                yield lr
+                step += 1
+                if step >= len(self):
+                    break

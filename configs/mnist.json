@@ -1,8 +1,8 @@
 {
     "train_table": {
         "type": "default",
-        "path": "/Users/v/cv3/data/mnist/train.csv",
-        "prefix": "/Users/v/cv3/data/mnist/train",
+        "path": "/home/v/cv3/data/mnist/train.csv",
+        "prefix": "/home/v/cv3/data/mnist/train",
         "mode": "gray"
     },
     "train_transformer": {
@@ -49,7 +49,7 @@
     },
     "scheduler": {
         "type": "sequential",
-        "epochs": 512,
+        "epochs": 16,
         "schedulers": [
             {
                 "type": "cosine",
