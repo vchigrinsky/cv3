@@ -71,24 +71,8 @@ if __name__ == '__main__':
         arguments.table, arguments.prefix, mode
     )
 
-    # >>>>> test transformer
-    transformer_type = config['test_transformer'].pop('type')
-
-    if transformer_type == 'default':
-        if 'transforms' in config['test_transformer']:
-            transforms = config['test_transformer'].pop('transforms')
-        else:
-            transforms = list()
-
-        transformer = cv3.transformer.Transformer(**config['test_transformer'])
-
-        for transform in transforms:
-            transform_type = transform.pop('type')
-
-            raise NotImplementedError
-
-    else:
-        raise NotImplementedError
+    # >>>>> test transform module
+    transform = cv3.transform.TransformModule(*config['test_transform'])
 
     # >>>>> model
     stem_type = config['stem'].pop('type')
@@ -134,7 +118,7 @@ if __name__ == '__main__':
 
     # >>>>> evaluate
     accuracy = cv3.evaluator.evaluate_classification(
-        table, transformer, stem, body, neck, head, 
+        table, transform, stem, body, neck, head, 
         arguments.batch_size, verbose=True
     )
 

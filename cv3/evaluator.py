@@ -3,7 +3,7 @@
 
 from .table import LabeledImageTable
 from .dataset import Dataset
-from .transformer import Transformer
+from .transform import TransformModule
 from .sampler import Sampler
 from torch.utils.data import DataLoader
 
@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 
 def evaluate_classification(
-    table: LabeledImageTable, transformer: Transformer, 
+    table: LabeledImageTable, transform: TransformModule, 
     stem: nn.Module, body: nn.Module, neck: nn.Module, head: nn.Module, 
     batch_size: int = 64,
     verbose: bool = True
@@ -23,7 +23,7 @@ def evaluate_classification(
 
     Args:
         table: dataset table with labels to evaluate on
-        transformer: preprocess module
+        transform: transform module
         stem: stem module
         body: body module
         neck: neck module
@@ -37,7 +37,7 @@ def evaluate_classification(
 
     labels = table.labels
 
-    dataset = Dataset(table, transformer)
+    dataset = Dataset(table, transform)
     sampler = Sampler(len(dataset), batch_size)
     loader = DataLoader(dataset=dataset, batch_sampler=sampler)
 

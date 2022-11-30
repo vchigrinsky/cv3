@@ -26,19 +26,21 @@ class Manager:
     """Manager helping to keep necessary information during experiment
     """
 
-    def __init__(self, config: dict, smoothing_window: int = 1024):
+    def __init__(
+        self, config: dict, watch: tuple = ('lr', 'train_loss'), 
+        smoothing_window: int = 1024
+    ):
         """Creates manager instance
 
         Args:
             config: experiment configuration dictionary
+            watch: attributes to watch on during experiment
             smoothing window: number of last seen images 
                 to smooth train loss over
         """
 
         self.config = config
         self.root = osp.abspath(self.config.pop('root'))
-
-        self.info = list()
 
         self.running_train_losses = list()
         self.running_images_seen = list()
@@ -47,168 +49,18 @@ class Manager:
 
         logging.basicConfig(level=logging.INFO)
 
-    # -------------------------------------------------------------------------
-
-    @property
-    def attributes(self) -> tuple:
-        """Get experiment attributes
-
-        Returns:
-            Info table columns except "step" and "lr"
-        """
-
-        table = self.get_info()
-
-        attributes = [
-            attribute for attribute in table.columns
-            if attribute not in {'step', 'lr'}
-        ]
-
-        return attributes
-
-    def plot_attribute_info(
-        self, attribute: str, 
-        points: int = 1024, margin: float = 0.1
-    ):
-        """Plots info for specific attribute
-
-        Args:
-            attribute: attribute name, i.e. "train_loss" or "lr"
-            points: number of points to plot
-            margin: top margin of the float (leave default if confused)
-        """
-
-        logging.info(f'plotting {attribute}')
-
-        table = self.get_info()
-
-        step = math.ceil(len(table) / points)
-
-        x, y = list(), list()
-        for n, value in zip(
-            table.dataframe.step.values, table.dataframe[attribute].values
-        ):
-            if n % step == 0:
-                x.append(n)
-                y.append(value)
-
-        x = np.asarray(x)
-        y = np.asarray(y)
-
-        xaxis = go.layout.XAxis(
-            title='Images seen', 
-            range=[x.min(), x.max()]
-        )
-
-        x = x[~np.isnan(y)]
-        y = y[~np.isnan(y)]
-
-        if attribute.endswith('loss'):
-            bottom = 0.0
-        else:
-            bottom = y.min() - (y.max() - y.min()) * margin
-
-        top = y.max() + (y.max() - y.min()) * margin
-
-        yaxis = go.layout.YAxis(
-            title=attribute.replace('_', ' ').title(), 
-            range=[bottom, top]
-        )
-
-        layout = go.Layout(
-            title=self.root, 
-            xaxis=xaxis, yaxis=yaxis
-        )
-
-        fig = go.Figure(layout=layout)
-
-        trace = go.Scatter(x=x, y=y)
-        fig.add_trace(trace)
-
-        fig.write_html(osp.join(self.root, f'{attribute}.html'))
-
-    def save_weights(
-        self, stem_weights: OrderedDict,
-        body_weights: OrderedDict, 
-        neck_weights: OrderedDict, 
-        head_weights: OrderedDict
-    ):
-        """Save model state dicts (body and head) to the experiment directory
-
-        Args:
-            stem_weights: model stem state dict
-            body_weights: model body state dict
-            neck_weights: model neck state dict
-            head_weights: model head state dict
-        """
-
-        torch.save(stem_weights, osp.join(self.root, 'weights.stem.pth'))
-        torch.save(body_weights, osp.join(self.root, 'weights.body.pth'))
-        torch.save(neck_weights, osp.join(self.root, 'weights.neck.pth'))
-        torch.save(head_weights, osp.join(self.root, 'weights.head.pth'))
-
-    def save_info(self):
-        """Dumps experiment info to "ROOT/info.csv"
-        """
-
-        table = self.get_info()
-        table.dataframe.to_csv(osp.join(self.root, 'info.csv'), index=False)
-
-    def get_info(self) -> Table:
-        """Returns experiment info as table object
-        """
-
-        dataframe = DataFrame(self.info)
-        table = Table(dataframe)
-
-        return table
-
-    def update_info(self, info: dict):
-        """Updates manager info
-
-        Args:
-            info: experiment info dictionary, i.e.
-                {
-                    'step': step,
-                    'lr': lr,
-                    'train_loss': train_loss,
-                    ...
-                }, must have 'step' and 'lr' keys
-        """
-
-        assert 'step' in info, 'info should has "step" key'
-        assert 'lr' in info, 'info should has "lr" key'
-
-        self.info.append(copy.deepcopy(info))
+        assert isinstance(watch, tuple), 'attributes to watch must be unmutable'
+        self.attributes = watch
 
     # -------------------------------------------------------------------------
 
-    def smooth_train_loss(self, train_loss: float, images_seen: int) -> float:
-        """Smooth train loss
-
-        Args:
-            train_loss: train loss on current batch
-            images_seen: current batch size
-
-        Returns:
-            smoothed train loss
+    def quit(self):
+        """Quits experiment
         """
 
-        self.running_train_losses.append(train_loss)
-        self.running_images_seen.append(images_seen)
+        logging.info('quitting')
 
-        smoothing_window = sum(self.running_images_seen)
-        while smoothing_window > self.smoothing_window:
-            _ = self.running_train_losses.pop(0)
-            smoothing_window -= self.running_images_seen.pop(0)
-
-        smoothed_train_loss = sum([
-            running_images_seen * running_train_loss 
-            for running_images_seen, running_train_loss 
-            in zip(self.running_images_seen, self.running_train_losses)
-        ]) / smoothing_window
-
-        return smoothed_train_loss
+        sys.exit(1)
 
     # -------------------------------------------------------------------------
 
@@ -240,12 +92,6 @@ class Manager:
 
         return exists, overwrite
 
-    def mkdir_experiment_root(self):
-        """Creates empty experiment directory
-        """
-
-        os.mkdir(self.root)
-
     def clear_experiment_root(self):
         """Creates empty experiment directory
         """
@@ -254,12 +100,26 @@ class Manager:
 
         shutil.rmtree(self.root)
 
+    def mkdir_experiment_root(self):
+        """Creates empty experiment directory
+        """
+
+        os.mkdir(self.root)
+
+    # -------------------------------------------------------------------------
+
     def init_experiment(self):
         """Initialize experiment with config file
         """
 
         with open(osp.join(self.root, 'config.json'), 'w') as f:
             json.dump(self.config, f, indent=4)
+
+        with open(osp.join(self.root, 'log.csv'), 'w') as f:
+            f.write('step')
+            for attribute in self.attributes:
+                f.write(f',{attribute}')
+            f.write('\n')
 
     def plot_lr_schedule(
         self, scheduler: Scheduler, 
@@ -304,10 +164,145 @@ class Manager:
 
         fig.write_html(osp.join(self.root, 'lr_schedule.html'))
 
-    def quit(self):
-        """Quits experiment
+    # -------------------------------------------------------------------------
+
+    def smooth_train_loss(
+        self, exact_train_loss: float, images_seen: int
+    ) -> float:
+        """Smooth train loss
+
+        Args:
+            exact_train_loss: exact value of train loss on current batch
+            images_seen: current batch size
+
+        Returns:
+            smoothed train loss
         """
 
-        logging.info('quitting')
+        self.running_train_losses.append(exact_train_loss)
+        self.running_images_seen.append(images_seen)
 
-        sys.exit(1)
+        smoothing_window = sum(self.running_images_seen)
+        while smoothing_window > self.smoothing_window:
+            _ = self.running_train_losses.pop(0)
+            smoothing_window -= self.running_images_seen.pop(0)
+
+        train_loss = sum([
+            running_images_seen * running_train_loss 
+            for running_images_seen, running_train_loss 
+            in zip(self.running_images_seen, self.running_train_losses)
+        ]) / smoothing_window
+
+        return train_loss
+
+    def log(self, step: int, log: dict):
+        """Logs attributes on current step to a file
+
+        Args:
+            log: values of attributes to log
+        """
+
+        with open(osp.join(self.root, 'log.csv'), 'a') as f:
+            f.write(f'{step}')
+            for attribute in self.attributes:
+                f.write(f',{log[attribute]}')
+            f.write('\n')
+
+    # -------------------------------------------------------------------------
+
+    def read_log_table(self) -> Table:
+        """Reads experiment log as table object
+
+        Returns:
+            log table
+        """
+
+        table = Table.read(osp.join(self.root, 'log.csv'))
+
+        return table
+
+    def plot_attribute_log(
+        self, attribute: str, log_table: Table = None,
+        points: int = 1024, margin: float = 0.1
+    ):
+        """Plots log for specific attribute
+
+        Args:
+            attribute: attribute name, i.e. "train_loss" or "lr"
+            log_table: full log table, if None then it will be read from file
+            points: number of points to plot
+            margin: top margin of the plot (default value is quite nice)
+        """
+
+        if log_table is None:
+            log_table = self.read_log_table()
+
+        logging.info(f'plotting {attribute}')
+
+        step = math.ceil(len(log_table) / points)
+
+        x, y = list(), list()
+        for n, value in zip(
+            log_table.dataframe.step.values, 
+            log_table.dataframe[attribute].values
+        ):
+            if n % step == 0:
+                x.append(n)
+                y.append(value)
+
+        x = np.asarray(x)
+        y = np.asarray(y)
+
+        xaxis = go.layout.XAxis(
+            title='Images seen', 
+            range=[x.min(), x.max()]
+        )
+
+        x = x[~np.isnan(y)]
+        y = y[~np.isnan(y)]
+
+        if attribute in ('lr', 'train_loss'):
+            bottom = 0.0
+        else:
+            bottom = y.min() - (y.max() - y.min()) * margin
+
+        top = y.max() + (y.max() - y.min()) * margin
+
+        yaxis = go.layout.YAxis(
+            title=attribute.replace('_', ' ').title(), 
+            range=[bottom, top]
+        )
+
+        layout = go.Layout(
+            title=self.root, 
+            xaxis=xaxis, yaxis=yaxis
+        )
+
+        fig = go.Figure(layout=layout)
+
+        trace = go.Scatter(x=x, y=y)
+        fig.add_trace(trace)
+
+        fig.write_html(osp.join(self.root, f'{attribute}.html'))
+
+    # -------------------------------------------------------------------------
+
+    def save_weights(
+        self, stem_weights: OrderedDict,
+        body_weights: OrderedDict, 
+        neck_weights: OrderedDict, 
+        head_weights: OrderedDict
+    ):
+        """Save model state dicts (body and head) to the experiment directory
+
+        Args:
+            stem_weights: model stem state dict
+            body_weights: model body state dict
+            neck_weights: model neck state dict
+            head_weights: model head state dict
+        """
+
+        torch.save(stem_weights, osp.join(self.root, 'weights.stem.pth'))
+        torch.save(body_weights, osp.join(self.root, 'weights.body.pth'))
+        torch.save(neck_weights, osp.join(self.root, 'weights.neck.pth'))
+        torch.save(head_weights, osp.join(self.root, 'weights.head.pth'))

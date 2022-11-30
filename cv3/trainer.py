@@ -4,7 +4,7 @@
 import math
 
 from .table import LabeledImageTable
-from .transformer import Transformer
+from .transform import TransformModule
 from .dataset import Dataset
 from .sampler import Sampler, ShuffledSampler
 from torch.utils.data import DataLoader
@@ -66,9 +66,7 @@ def train(
         for batch, labels in train_loader:
             lr = next(schedule)
             
-            info = dict()
-            info['step'] = step
-            info['lr'] = lr
+            log = {'lr': lr}
 
             for parameters_group in optimizer.param_groups:
                 parameters_group['lr'] = lr
@@ -80,31 +78,31 @@ def train(
             logits = head(descriptors)
 
             loss = loss_module(logits, labels)
-            train_loss = loss.item()
-            smoothed_train_loss = manager.smooth_train_loss(
-                train_loss=train_loss, images_seen=len(batch)
+            exact_train_loss = loss.item()
+            train_loss = manager.smooth_train_loss(
+                exact_train_loss=exact_train_loss, images_seen=len(batch)
             )
 
-            info['train_loss'] = train_loss
-            info['smoothed_train_loss'] = smoothed_train_loss
+            log['train_loss'] = train_loss
             progress_bar.set_description(
-                f'LR {lr:.4f}; Train loss {smoothed_train_loss:.4f}'
+                f'LR {lr:.4f}; Train loss {train_loss:.4f}'
             )
 
             loss.backward()
 
             optimizer.step()
-            step += len(batch)
 
-            manager.update_info(info)
+            manager.log(step, log)
             progress_bar.update(len(batch))
+
+            step += len(batch)
 
     progress_bar.close()
 
-    manager.save_info()
+    log_table = manager.read_log_table()
 
     for attribute in manager.attributes:
-        manager.plot_attribute_info(attribute)
+        manager.plot_attribute_log(attribute, log_table)
 
     stem = stem.eval()
     body = body.eval()
@@ -140,7 +138,7 @@ def parse_config(config: dict) -> (
     """
 
     # >>>>> manager
-    manager = Manager(config)
+    manager = Manager(config, watch=('lr', 'train_loss'))
 
     exists, overwrite = manager.check_experiment_root()
     if exists:
@@ -164,31 +162,11 @@ def parse_config(config: dict) -> (
     else:
         raise NotImplementedError
 
-    # >>>>> train transformer
-    train_transformer_type = config['train_transformer'].pop('type')
-
-    if train_transformer_type == 'default':
-        if 'transforms' in config['train_transformer']:
-            transforms = config['train_transformer'].pop('transforms')
-        else:
-            transforms = list()
-
-        train_transformer = Transformer(**config['train_transformer'])
-
-        for transform in transforms:
-            transform_type = transform.pop('type')
-
-            if transform_type == 'random_crop':
-                train_transformer.add_random_crop(**transform)
-
-            else:
-                raise NotImplementedError
-
-    else:
-        raise NotImplementedError
 
     # >>>>> train loader
-    train_dataset = Dataset(train_table, train_transformer)
+    train_transform = TransformModule(*config['train_transform'])
+
+    train_dataset = Dataset(train_table, train_transform)
 
     train_loader_workers = config['train_sampler'].pop('workers')
 

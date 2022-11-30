@@ -3,7 +3,7 @@
 
 from .image import Image
 from .table import ImageTable, LabeledImageTable
-from .transformer import Transformer
+from .transform import TransformModule
 
 from torch.utils.data import Dataset as TorchDataset
 
@@ -14,7 +14,7 @@ class Dataset(TorchDataset):
 
     def __init__(
         self, table: ImageTable or LabeledImageTable, 
-        transformer: Transformer
+        transform: TransformModule
     ):
         """Creates PyTorch dataset on table
 
@@ -26,7 +26,7 @@ class Dataset(TorchDataset):
         super().__init__()
 
         self.table = table
-        self.transformer = transformer
+        self.transform = transform
 
     def __len__(self) -> int:
         """Dataset length
@@ -40,11 +40,11 @@ class Dataset(TorchDataset):
 
         if isinstance(self.table, LabeledImageTable):
             image, label = self.table[index]
-            return self.transformer(image.tensor), label
+            return self.transform(image.tensor), label
 
         elif isinstance(self.table, ImageTable):
             image = self.table[index]
-            return self.transformer(image.tensor)
+            return self.transform(image.tensor)
 
         else:
             raise NotImplementedError
