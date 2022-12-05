@@ -1,12 +1,14 @@
 """Train model
 """
 
+import sys
+
 import math
 
-from .table import LabeledImageTable
+from .table import ImageTable
 from .transform import TransformModule
 from .dataset import Dataset
-from .sampler import Sampler, ShuffledSampler
+from .sampler import Sampler, ShuffledSampler, PredefinedSampler
 from torch.utils.data import DataLoader
 
 import torch
@@ -28,114 +30,14 @@ from .manager import Manager
 from tqdm import tqdm
 
 
-def train(
-    train_table: LabeledImageTable, train_loader: DataLoader,
-    stem: nn.Module, body: nn.Module, neck: nn.Module, head: nn.Module,
-    optimizer: Optimizer, scheduler: Scheduler,
-    loss_module: nn.Module,
-    manager: Manager
-):
-    """Train model
+def train(config: dict):
+    """Parse config and train model
 
     Args:
-        train_table: labeled image table for training
-        train_loader: dataloader of train dataset
-        stem: stem module
-        body: body module
-        neck: neck module
-        head: head module
-        optimizer: optimizer
-        scheduler: learning rate scheduler
-        loss_module: loss module
-        manager: experiment helper
+        config: experiment configuration dictionary
     """
 
-    epochs = len(scheduler) // len(train_table)
-
-    progress_bar = tqdm(total=len(scheduler))
-
-    stem = stem.train()
-    body = body.train()
-    neck = neck.train()
-    head = head.train()
-
-    schedule = iter(scheduler)
-
-    step = 0
-    for epoch in range(epochs):
-        for batch, labels in train_loader:
-            lr = next(schedule)
-            
-            log = {'lr': lr}
-
-            for parameters_group in optimizer.param_groups:
-                parameters_group['lr'] = lr
-            optimizer.zero_grad()
-
-            feature_map = stem(batch)
-            feature_map = body(feature_map)
-            descriptors = neck(feature_map)
-            logits = head(descriptors)
-
-            loss = loss_module(logits, labels)
-            exact_train_loss = loss.item()
-            train_loss = manager.smooth_train_loss(
-                exact_train_loss=exact_train_loss, images_seen=len(batch)
-            )
-
-            log['train_loss'] = train_loss
-            progress_bar.set_description(
-                f'LR {lr:.4f}; Train loss {train_loss:.4f}'
-            )
-
-            loss.backward()
-
-            optimizer.step()
-
-            manager.log(step, log)
-            progress_bar.update(len(batch))
-
-            step += len(batch)
-
-    progress_bar.close()
-
-    log_table = manager.read_log_table()
-
-    for attribute in manager.attributes:
-        manager.plot_attribute_log(attribute, log_table)
-
-    stem = stem.eval()
-    body = body.eval()
-    neck = neck.eval()
-    head = head.eval()
-
-    manager.save_weights(
-        stem.state_dict(), 
-        body.state_dict(), 
-        neck.state_dict(), 
-        head.state_dict()
-    )
-
-# -----------------------------------------------------------------------------
-
-
-def parse_config(config: dict) -> (
-    LabeledImageTable, DataLoader,
-    nn.Module, nn.Module, nn.Module, nn.Module,
-    Optimizer, Scheduler,
-    nn.Module
-):
-    """Prepare train experiment
-
-    Args:
-        config: configuration dictionary
-
-    Returns:
-        train table, train loader, 
-        stem, body, neck, head modules,
-        optimizer, scheduler,
-        loss module
-    """
+    # --- CONFIG PARSE --------------------------------------------------------
 
     # >>>>> manager
     manager = Manager(config, watch=('lr', 'train_loss'))
@@ -157,16 +59,22 @@ def parse_config(config: dict) -> (
     train_table_type = config['train_table'].pop('type')
 
     if train_table_type == 'default':
-        train_table = LabeledImageTable.read(**config['train_table'])
+        train_table = ImageTable.read(**config['train_table'])
 
     else:
         raise NotImplementedError
 
-
     # >>>>> train loader
     train_transform = TransformModule(*config['train_transform'])
 
-    train_dataset = Dataset(train_table, train_transform)
+    return_index = config['train_sampler'].pop('return_index')
+    return_transform = config['train_sampler'].pop('return_transform')
+
+    train_dataset = Dataset(
+        train_table, train_transform, 
+        return_index=return_index,
+        return_transform=return_transform
+    )
 
     train_loader_workers = config['train_sampler'].pop('workers')
 
@@ -175,6 +83,12 @@ def parse_config(config: dict) -> (
     if train_sampler_type == 'default':
         train_sampler = ShuffledSampler(
             length=len(train_dataset), 
+            **config['train_sampler']
+        )
+
+    elif train_sampler_type == 'predefined':
+        train_sampler = PredefinedSampler(
+            length=len(train_dataset),
             **config['train_sampler']
         )
 
@@ -199,7 +113,7 @@ def parse_config(config: dict) -> (
     body_type = config['body'].pop('type')
 
     if body_type == 'convnet':
-        body = ConvNet(in_channels=stem.conv.out_channels, **config['body'])
+        body = ConvNet(in_channels=stem.out_channels, **config['body'])
 
     else:
         raise NotImplementedError
@@ -207,7 +121,7 @@ def parse_config(config: dict) -> (
     neck_type = config['neck'].pop('type')
 
     if neck_type == 'default':
-        neck = Neck(in_channels=body.descriptor_size, **config['neck'])
+        neck = Neck(in_channels=body.out_channels, **config['neck'])
 
     else:
         raise NotImplementedError
@@ -216,8 +130,8 @@ def parse_config(config: dict) -> (
 
     if head_type == 'default':
         head = Head(
-            descriptor_size=neck.descriptor_size,
             classes=train_table.classes,
+            descriptor_size=neck.out_channels,
             **config['head']
         )
 
@@ -326,10 +240,75 @@ def parse_config(config: dict) -> (
 
     manager.plot_lr_schedule(scheduler)
 
-    return (
-        train_table, train_loader,
-        stem, body, neck, head,
-        optimizer, scheduler,
-        loss_module,
-        manager
+    # --- TRAIN LOOP ----------------------------------------------------------
+
+    progress_bar = tqdm(total=len(scheduler))
+
+    stem = stem.train()
+    body = body.train()
+    neck = neck.train()
+    head = head.train()
+
+    schedule = iter(scheduler)
+
+    step = 0
+    for epoch in range(epochs):
+        for batch, labels, meta in train_loader:
+            if return_index:
+                indices = list(meta['index'])
+                manager.log_indices(indices)
+
+            lr = next(schedule)
+            
+            log = {'lr': lr}
+
+            for parameters_group in optimizer.param_groups:
+                parameters_group['lr'] = lr
+            optimizer.zero_grad()
+
+            feature_map = stem(batch)
+            feature_map = body(feature_map)
+            descriptors = neck(feature_map)
+            logits = head(descriptors)
+
+            loss = loss_module(logits, labels)
+            exact_train_loss = loss.item()
+            train_loss = manager.smooth_train_loss(
+                exact_train_loss=exact_train_loss, images_seen=len(batch)
+            )
+
+            log['train_loss'] = train_loss
+            progress_bar.set_description(
+                f'LR {lr:.4f}; Train loss {train_loss:.4f}'
+            )
+
+            loss.backward()
+
+            optimizer.step()
+
+            manager.log(step, log)
+            progress_bar.update(len(batch))
+
+            for _ in range(len(batch) - 1):
+                _ = next(schedule)
+
+            step += len(batch)
+
+    progress_bar.close()
+
+    log_table = manager.read_log_table()
+
+    for attribute in manager.attributes:
+        manager.plot_attribute_log(attribute, log_table)
+
+    stem = stem.eval()
+    body = body.eval()
+    neck = neck.eval()
+    head = head.eval()
+
+    manager.save_weights(
+        stem.state_dict(), 
+        body.state_dict(), 
+        neck.state_dict(), 
+        head.state_dict()
     )

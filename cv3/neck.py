@@ -3,6 +3,7 @@
 
 from torch import Tensor
 
+import torch
 from torch import nn
 
 
@@ -11,36 +12,45 @@ class Neck(nn.Module):
     """
 
     def __init__(
-        self, in_channels: int, descriptor_size: int, init_weights: bool = True
+        self, out_channels: int, in_channels: int, weights: str = None
     ):
         """Creates neck module
 
         Args:
+            out_channels: output channels
             in_channels: input channels
-            descriptor_size: output channels
-            init_weights: resnet-style weights initialization flag
+            weights: path to weights for initialization 
+                or None for random ResNet-style initialization
         """
 
         super().__init__()
 
+        self.in_channels = in_channels
+
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.flatten = nn.Flatten()
-        self.linear = nn.Linear(in_channels, descriptor_size, bias=False)
-        self.bn = nn.BatchNorm1d(descriptor_size)
+        self.linear = nn.Linear(in_channels, out_channels, bias=False)
+        self.bn = nn.BatchNorm1d(out_channels)
 
-        if init_weights:
-            self.init_weights()
+        self.init_weights(weights)
 
-        self.descriptor_size = descriptor_size
+        self.out_channels = out_channels
 
-    def init_weights(self):
-        """Performs ResNet-style weight initialization
+    def init_weights(self, path: str = None):
+        """Initialize weights
+
+        Arguments:
+            path: path to .pth file with weights to initialize model with
         """
 
-        nn.init.normal_(self.linear.weight, mean=0.0, std=0.01)
+        if path is None:
+            nn.init.normal_(self.linear.weight, mean=0.0, std=0.01)
 
-        nn.init.ones_(self.bn.weight)
-        nn.init.zeros_(self.bn.bias)
+            nn.init.ones_(self.bn.weight)
+            nn.init.zeros_(self.bn.bias)
+
+        else:
+            self.load_state_dict(torch.load(path))
 
     def forward(self, x: Tensor) -> Tensor: 
         """Pass tensor through net neck

@@ -31,6 +31,12 @@ if __name__ == '__main__':
     with open(arguments.config, 'r') as f:
         config = json.load(f)
 
-    config['root'] = arguments.config[:-5]
+    if 'experiment_name' not in config:
+        config['experiment_name'] = osp.split(arguments.config)[1][:-5]    
 
-    cv3.trainer.train(*cv3.trainer.parse_config(config))
+    if 'root' not in config:
+        config['root'] = osp.join(
+            osp.split(arguments.config)[0], config['experiment_name']
+        )
+
+    cv3.trainer.train(config)

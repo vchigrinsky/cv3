@@ -3,6 +3,7 @@
 
 from torch import Tensor
 
+import torch
 from torch import nn
 
 
@@ -11,30 +12,36 @@ class Head(nn.Module):
     """
 
     def __init__(
-        self, descriptor_size: int, classes: int, 
-        init_weights: bool = True
+        self, classes: int, descriptor_size: int, weights: str = None
     ):
         """Creates model head
 
         Args:
-            descriptor_size: input channels
             classes: output channels
-            init_weights: resnet-style weights initialization flag
+            descriptor_size: input channels
+            weights: path to weights for initialization 
+                or None for random ResNet-style initialization
         """
 
         super().__init__()
 
         self.linear = nn.Linear(descriptor_size, classes, bias=True)
 
-        if init_weights:
-            self.init_weights()
+        self.init_weights(weights)
 
-    def init_weights(self):
-        """Performs ResNet-style weight initialization
+    def init_weights(self, path: str = None):
+        """Initialize weights
+
+        Arguments:
+            path: path to .pth file with weights to initialize model with
         """
 
-        nn.init.normal_(self.linear.weight, mean=0.0, std=0.01)
-        nn.init.zeros_(self.linear.bias)
+        if path is None:
+            nn.init.normal_(self.linear.weight, mean=0.0, std=0.01)
+            nn.init.zeros_(self.linear.bias)
+
+        else:
+            self.load_state_dict(torch.load(path))
 
     def forward(self, x: Tensor) -> Tensor:
         """Pass tensor through net head

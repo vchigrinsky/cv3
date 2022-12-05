@@ -2,7 +2,7 @@
 """
 
 from .image import Image
-from .table import ImageTable, LabeledImageTable
+from .table import ImageTable
 from .transform import TransformModule
 
 from torch.utils.data import Dataset as TorchDataset
@@ -13,20 +13,27 @@ class Dataset(TorchDataset):
     """
 
     def __init__(
-        self, table: ImageTable or LabeledImageTable, 
-        transform: TransformModule
+        self, table: ImageTable, transform: TransformModule, 
+        return_index: bool = False, return_transform: bool = False
     ):
         """Creates PyTorch dataset on table
 
         Args:
             table: image table (may be labeled or not)
             transformer: preprocess module
+            return_index: return index flag
+            return_transform: return transforms parameters
         """
 
         super().__init__()
 
         self.table = table
         self.transform = transform
+
+        self.labeled = self.table.labels is not None
+
+        self.return_index = return_index
+        self.return_transform = return_transform
 
     def __len__(self) -> int:
         """Dataset length
@@ -36,15 +43,22 @@ class Dataset(TorchDataset):
 
     def __getitem__(self, index: int) -> int:
         """Gets tensor and optionally label from dataset
+
+        Args:
+            index: table index
         """
 
-        if isinstance(self.table, LabeledImageTable):
-            image, label = self.table[index]
-            return self.transform(image.tensor), label
+        image = self.table[index]
+        tensor, transform = self.transform(image.tensor)
+        
+        meta = dict()
+        if self.return_index:
+            meta['index'] = index
+        if self.return_transform:
+            meta['transform'] = transform
 
-        elif isinstance(self.table, ImageTable):
-            image = self.table[index]
-            return self.transform(image.tensor)
-
+        if self.labeled:
+            label = self.table.labels[index].item()
+            return tensor, label, meta
         else:
-            raise NotImplementedError
+            return tensor, meta

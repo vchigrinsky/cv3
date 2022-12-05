@@ -195,6 +195,8 @@ class Manager:
 
         return train_loss
 
+    # -------------------------------------------------------------------------
+
     def log(self, step: int, log: dict):
         """Logs attributes on current step to a file
 
@@ -207,6 +209,16 @@ class Manager:
             for attribute in self.attributes:
                 f.write(f',{log[attribute]}')
             f.write('\n')
+
+    def log_indices(self, indices: list):
+        """Logs batch indices ot a separate log file
+
+        Args:
+            indices: batch indices to log
+        """
+
+        with open(osp.join(self.root, 'log.indices'), 'a') as f:
+            f.write(' '.join([str(index.item()) for index in indices]) + '\n')
 
     # -------------------------------------------------------------------------
 

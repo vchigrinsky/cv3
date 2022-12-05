@@ -1,8 +1,8 @@
 {
     "train_table": {
         "type": "default",
-        "path": "/Users/v/cv3/data/mnist/train.csv",
-        "prefix": "/Users/v/cv3/data/mnist/train",
+        "path": "",
+        "prefix": "",
         "mode": "gray"
     },
     "train_transform": [
@@ -21,24 +21,28 @@
         }
     ],
     "train_sampler": {
-        "type": "default",
+        "type": "predefined",
         "batch_size": 128,
-        "drop_last": false,
+        "path": "",
         "workers": 0
     },
     "stem": {
         "type": "default",
-        "out_channels": 16
+        "out_channels": 16,
+        "weights": ""
     },
     "body": {
-        "type": "convnet"
+        "type": "convnet",
+        "weights": ""
     },
     "neck": {
         "type": "default",
-        "descriptor_size": 128
+        "out_channels": 128,
+        "weights": ""
     },
     "head": {
-        "type": "default"
+        "type": "default",
+        "weights": ""
     },
     "loss": {
         "type": "xent"
@@ -67,6 +71,10 @@
                 "stop": 0.0
             }
         ]
+    },
+    "test_table": {
+        "type": "default",
+        "mode": "gray"
     },
     "test_transform": [
         {
