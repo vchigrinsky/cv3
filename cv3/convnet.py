@@ -5,7 +5,6 @@ import math
 
 from torch import Tensor
 
-import torch
 from torch import nn
 
 
@@ -13,22 +12,15 @@ class ConvNet(nn.Module):
     """Convolutional network
     """
 
-    def __init__(
-        self, out_channels: int = 0, in_channels: int = 16,  
-        weights: str = None,
-    ):
+    def __init__(self, out_channels: int = 0, in_channels: int = 16):
         """Creates base convolutional model
 
         Args:
             out_channels: output channels
             in_channels: input channels
-            weights: path to weights for initialization 
-                or None for random ResNet-style initialization
         """
 
         super().__init__()
-
-        self.in_channels = in_channels
 
         channels = in_channels
         self.conv1 = nn.Conv2d(channels, channels * 2, 3, bias=False)
@@ -48,32 +40,26 @@ class ConvNet(nn.Module):
         self.bn3 = nn.BatchNorm2d(out_channels)
         self.relu3 = nn.ReLU()
 
-        self.init_weights(weights)
+        self.init_weights()
 
+        self.in_channels = in_channels
         self.out_channels = out_channels
 
-    def init_weights(self, path: str = None):
-        """Initialize weights
-
-        Arguments:
-            path: path to .pth file with weights to initialize model with
+    def init_weights(self):
+        """ResNet-style weights initialization
         """
 
-        if path is None:
-            for m in self.modules():
-                if isinstance(m, nn.Conv2d):
-                    fan_out = (m.kernel_size[0] * m.kernel_size[1]) \
-                        * m.out_channels
-                    nn.init.normal_(
-                        m.weight, mean=0.0, std=math.sqrt(2.0 / fan_out)
-                    )
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                fan_out = (m.kernel_size[0] * m.kernel_size[1]) \
+                    * m.out_channels
+                nn.init.normal_(
+                    m.weight, mean=0.0, std=math.sqrt(2.0 / fan_out)
+                )
 
-                elif isinstance(m, nn.BatchNorm2d):
-                    nn.init.ones_(m.weight)
-                    nn.init.zeros_(m.bias)
-
-        else:
-            self.load_state_dict(torch.load(path))
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
 
     def forward(self, x: Tensor) -> Tensor:
         """Pass tensor through net

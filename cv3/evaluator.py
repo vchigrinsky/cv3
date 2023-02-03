@@ -31,6 +31,7 @@ def evaluate_classification(config: dict, verbose: bool = True) -> float:
 
     # >>>>> test table    
     test_table_type = config['test_table'].pop('type')
+
     if test_table_type == 'default':
         test_table = ImageTable.read(**config['test_table'])
 
@@ -38,15 +39,23 @@ def evaluate_classification(config: dict, verbose: bool = True) -> float:
         raise NotImplementedError
 
     # >>>>> test loader
-    test_transform = TransformModule(*config['test_transform'])
+    test_loader_type = config['test_loader'].pop('type')
 
-    test_dataset = Dataset(test_table, test_transform)
+    if test_loader_type == 'default':
+        config['test_transform'] = config['test_loader'].pop('transform')
 
-    test_sampler = Sampler(len(test_dataset), config['batch_size'])
-    
-    test_loader = DataLoader(
-        dataset=test_dataset, batch_sampler=test_sampler, num_workers=0
-    )
+        test_transform = TransformModule(*config['test_transform'])
+
+        test_dataset = Dataset(test_table, test_transform)
+
+        test_sampler = Sampler(len(test_dataset), config['batch_size'])
+        
+        test_loader = DataLoader(
+            dataset=test_dataset, batch_sampler=test_sampler, num_workers=0
+        )
+
+    else:
+        raise NotImplementedError
 
     # >>>>> model
     stem_weights = torch.load(config['stem'].pop('weights'))

@@ -10,6 +10,10 @@ import os.path as osp
 
 import json
 
+import random
+import numpy as np
+import torch
+
 
 if __name__ == '__main__':
     """Run classification train

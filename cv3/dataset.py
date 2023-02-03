@@ -1,6 +1,8 @@
 """PyTorch dataset wrapper on table
 """
 
+from torch import Tensor
+
 from .image import Image
 from .table import ImageTable
 from .transform import TransformModule
@@ -13,16 +15,13 @@ class Dataset(TorchDataset):
     """
 
     def __init__(
-        self, table: ImageTable, transform: TransformModule, 
-        return_index: bool = False, return_transform: bool = False
+        self, table: ImageTable, transform: TransformModule
     ):
         """Creates PyTorch dataset on table
 
         Args:
             table: image table (may be labeled or not)
             transformer: preprocess module
-            return_index: return index flag
-            return_transform: return transforms parameters
         """
 
         super().__init__()
@@ -32,33 +31,27 @@ class Dataset(TorchDataset):
 
         self.labeled = self.table.labels is not None
 
-        self.return_index = return_index
-        self.return_transform = return_transform
-
     def __len__(self) -> int:
         """Dataset length
         """
 
         return len(self.table)
 
-    def __getitem__(self, index: int) -> int:
+    def __getitem__(self, index: int) -> Tensor or (Tensor, int):
         """Gets tensor and optionally label from dataset
 
         Args:
             index: table index
+
+        Returns:
+            tensor or tensor and label
         """
 
         image = self.table[index]
-        tensor, transform = self.transform(image.tensor)
-        
-        meta = dict()
-        if self.return_index:
-            meta['index'] = index
-        if self.return_transform:
-            meta['transform'] = transform
+        tensor = self.transform(image.tensor)
 
         if self.labeled:
             label = self.table.labels[index].item()
-            return tensor, label, meta
+            return tensor, label
         else:
-            return tensor, meta
+            return tensor

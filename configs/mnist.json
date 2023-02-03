@@ -5,44 +5,42 @@
         "prefix": "",
         "mode": "gray"
     },
-    "train_transform": [
-        {
-            "transform": "resize",
-            "size": 32
+    "train_loader": {
+        "type": "default",
+        "transform": [
+            {
+                "transform": "resize",
+                "size": 32
+            },
+            {
+                "transform": "random_crop",
+                "size": 28
+            },
+            {
+                "transform": "normalize",
+                "mean": 0.1309,
+                "std": 0.3084
+            }
+        ],
+        "sampler": {
+            "type": "default",
+            "batch_size": 128
         },
-        {
-            "transform": "random_crop",
-            "size": 28
-        },
-        {
-            "transform": "normalize",
-            "mean": 0.1309,
-            "std": 0.3084
-        }
-    ],
-    "train_sampler": {
-        "type": "predefined",
-        "batch_size": 128,
-        "path": "",
-        "workers": 0
+        "num_workers": 0
     },
     "stem": {
         "type": "default",
-        "out_channels": 16,
-        "weights": ""
+        "out_channels": 16
     },
     "body": {
-        "type": "convnet",
-        "weights": ""
+        "type": "convnet"
     },
     "neck": {
         "type": "default",
-        "out_channels": 128,
-        "weights": ""
+        "out_channels": 128
     },
     "head": {
-        "type": "default",
-        "weights": ""
+        "type": "default"
     },
     "loss": {
         "type": "xent"
@@ -72,23 +70,27 @@
             }
         ]
     },
+    "seed": 420,
     "test_table": {
         "type": "default",
         "mode": "gray"
     },
-    "test_transform": [
-        {
-            "transform": "resize",
-            "size": 32
-        },
-        {
-            "transform": "center_crop",
-            "size": 28
-        },
-        {
-            "transform": "normalize",
-            "mean": 0.1309,
-            "std": 0.3084
-        }
-    ]
+    "test_loader": {
+        "type": "default",
+        "transform": [
+            {
+                "transform": "resize",
+                "size": 32
+            },
+            {
+                "transform": "center_crop",
+                "size": 28
+            },
+            {
+                "transform": "normalize",
+                "mean": 0.1309,
+                "std": 0.3084
+            }
+        ]
+    }
 }

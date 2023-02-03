@@ -5,10 +5,13 @@ import sys
 
 import math
 
+import random
+import numpy as np
+
 from .table import ImageTable
 from .transform import TransformModule
 from .dataset import Dataset
-from .sampler import Sampler, ShuffledSampler, PredefinedSampler
+from .sampler import Sampler, ShuffledSampler
 from torch.utils.data import DataLoader
 
 import torch
@@ -55,6 +58,12 @@ def train(config: dict):
 
     manager.init_experiment()
 
+    # >>>>> random seed
+    if 'seed' in config and config['seed'] is not None:
+        random.seed(config['seed'])
+        np.random.seed(config['seed'])
+        torch.manual_seed(config['seed'])
+
     # >>>>> train table
     train_table_type = config['train_table'].pop('type')
 
@@ -65,41 +74,41 @@ def train(config: dict):
         raise NotImplementedError
 
     # >>>>> train loader
-    train_transform = TransformModule(*config['train_transform'])
+    train_loader_type = config['train_loader'].pop('type')
 
-    return_index = config['train_sampler'].pop('return_index')
-    return_transform = config['train_sampler'].pop('return_transform')
+    if train_loader_type == 'default':
+        config['train_transform'] = config['train_loader'].pop('transform')
+        config['train_sampler'] = config['train_loader'].pop('sampler')
 
-    train_dataset = Dataset(
-        train_table, train_transform, 
-        return_index=return_index,
-        return_transform=return_transform
-    )
+        train_transform = TransformModule(*config['train_transform'])
 
-    train_loader_workers = config['train_sampler'].pop('workers')
+        train_dataset = Dataset(train_table, train_transform)
 
-    train_sampler_type = config['train_sampler'].pop('type')
+        train_sampler_type = config['train_sampler'].pop('type')
 
-    if train_sampler_type == 'default':
-        train_sampler = ShuffledSampler(
-            length=len(train_dataset), 
-            **config['train_sampler']
-        )
+        if train_sampler_type == 'default':
+            train_sampler = ShuffledSampler(
+                length=len(train_dataset), 
+                **config['train_sampler']
+            )
 
-    elif train_sampler_type == 'predefined':
-        train_sampler = PredefinedSampler(
-            length=len(train_dataset),
-            **config['train_sampler']
+        elif train_sampler_type == 'predefined':
+            train_sampler = PredefinedSampler(
+                length=len(train_dataset),
+                **config['train_sampler']
+            )
+
+        else:
+            raise NotImplementedError
+
+        train_loader = DataLoader(
+            dataset=train_dataset, 
+            batch_sampler=train_sampler,
+            **config['train_loader']
         )
 
     else:
         raise NotImplementedError
-
-    train_loader = DataLoader(
-        dataset=train_dataset, 
-        batch_sampler=train_sampler, 
-        num_workers=train_loader_workers
-    )
 
     # >>>>> model
     stem_type = config['stem'].pop('type')
@@ -253,10 +262,7 @@ def train(config: dict):
 
     step = 0
     for epoch in range(epochs):
-        for batch, labels, meta in train_loader:
-            if return_index:
-                indices = list(meta['index'])
-                manager.log_indices(indices)
+        for batch, labels in train_loader:
 
             lr = next(schedule)
             

@@ -210,16 +210,6 @@ class Manager:
                 f.write(f',{log[attribute]}')
             f.write('\n')
 
-    def log_indices(self, indices: list):
-        """Logs batch indices ot a separate log file
-
-        Args:
-            indices: batch indices to log
-        """
-
-        with open(osp.join(self.root, 'log.indices'), 'a') as f:
-            f.write(' '.join([str(index.item()) for index in indices]) + '\n')
-
     # -------------------------------------------------------------------------
 
     def read_log_table(self) -> Table:
